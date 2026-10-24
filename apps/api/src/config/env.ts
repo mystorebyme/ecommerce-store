@@ -1,0 +1,1 @@
+// Purpose: Environment variables validation

@@ -1,0 +1,1 @@
+// Purpose: coupons: Module tests

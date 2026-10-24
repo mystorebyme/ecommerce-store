@@ -1,0 +1,1 @@
+# Purpose: Admin Docker image

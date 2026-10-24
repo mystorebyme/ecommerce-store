@@ -1,0 +1,1 @@
+// Purpose: banners: Module tests

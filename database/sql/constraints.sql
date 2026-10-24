@@ -1,0 +1,1 @@
+-- Purpose: DB safety: CHECK stock >= 0, unique webhook_event_id, unique idempotency key
