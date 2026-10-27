@@ -1,1 +1,86 @@
 # Purpose: Local development: postgres, redis, api, web, admin ek saath
+#
+# Minimum jo asli payment test karne ke liye chahiye:
+#   docker compose up -d postgres      # DB
+#   docker compose run --rm migrate    # tables + constraints
+#   npm run api:dev                    # API (host machine par, hot reload ke saath)
+#
+# Poora stack (api + db + redis) chahiye to: docker compose up --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: youpi-postgres
+    environment:
+      POSTGRES_USER: youpi
+      POSTGRES_PASSWORD: youpi
+      POSTGRES_DB: youpi
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U youpi -d youpi"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: youpi-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Ek baar chalne wala migration container (prisma migrate + SQL constraints)
+  migrate:
+    image: node:22-alpine
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://youpi:youpi@postgres:5432/youpi
+    volumes:
+      - ./:/app
+    command: >
+      sh -c "npm install --no-audit --no-fund &&
+             npm run prisma:generate &&
+             npx prisma migrate deploy --schema database/prisma/schema.prisma &&
+             psql \"$$DATABASE_URL\" -f database/sql/constraints.sql || true"
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: youpi-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgres://youpi:youpi@postgres:5432/youpi
+      PUBLIC_WEB_URL: http://localhost:3000
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      PAYMENT_TTL_SECONDS: ${PAYMENT_TTL_SECONDS:-300}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./packages:/packages
+
+volumes:
+  pgdata:
+  redisdata:

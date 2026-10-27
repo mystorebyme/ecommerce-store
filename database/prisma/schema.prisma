@@ -1,1 +1,156 @@
 // Purpose: Poora DB schema (tables, relations). Paisa integer paise me
+//
+// Scope of this slice: catalog price + order + payment attempt + webhook dedupe.
+// Ye wo minimum tables hain jinse ek asli Razorpay UPI payment end-to-end chalta hai.
+// Baaki [P1] modules (users, addresses, cart, shipping, invoices, consents, audit-logs)
+// apne modules ke saath yahan add honge — ye file hi single source of truth rahegi.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Catalog — price ka single source of truth (client se aayi price par bharosa nahi)
+// ---------------------------------------------------------------------------
+
+model Product {
+  id         String   @id @default(cuid())
+  sku        String   @unique
+  name       String
+  /// Integer paise. ₹499.00 = 49900. Kabhi float nahi.
+  pricePaise Int
+  stock      Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  items      OrderItem[]
+
+  @@index([active])
+}
+
+// ---------------------------------------------------------------------------
+// Orders
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FULFILLED
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  number         String      @unique // YP-1041 (customer-facing)
+  status         OrderStatus @default(PENDING_PAYMENT)
+  /// Server ne products se recompute kiya hua total. Client ka bheja amount ignore hota hai.
+  amountPaise    Int
+  currency       String      @default("INR")
+  customerName   String
+  customerPhone  String
+  /// Idempotency-Key header ka hash — double click par double order nahi banta.
+  idempotencyKey String      @unique
+  items          OrderItem[]
+  payments       Payment[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([status])
+  @@index([customerPhone])
+}
+
+model OrderItem {
+  id             String  @id @default(cuid())
+  orderId        String
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product @relation(fields: [productId], references: [id])
+  sku            String
+  name           String
+  unitPricePaise Int
+  qty            Int
+  lineTotalPaise Int
+
+  @@index([orderId])
+  // Ek order me ek product ek hi row me (merge qty instead of duplicate rows).
+  @@unique([orderId, productId])
+}
+
+// ---------------------------------------------------------------------------
+// Payments — har try ka apna record, har try ka apna single-use QR
+// ---------------------------------------------------------------------------
+
+enum PaymentStatus {
+  CREATED // provider order bana, QR ban raha hai
+  PENDING // QR ready, buyer ke scan ka wait
+  PAID // sirf verified webhook / server-side verify se
+  FAILED
+  EXPIRED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String
+  order             Order         @relation(fields: [orderId], references: [id])
+  provider          String        @default("razorpay")
+  providerOrderId   String // rzp order_xxx
+  providerQrId      String? // rzp qr_xxx
+  /// QR me encode hui `upi://pay?...` string (client sirf image dikhata hai)
+  qrString          String?
+  qrImageUrl        String?
+  amountPaise       Int
+  currency          String        @default("INR")
+  status            PaymentStatus @default(CREATED)
+  method            String? // upi / card / netbanking
+  providerPaymentId String?
+  /// UPI reference (12 digit UTR) — reconciliation ke liye
+  utr               String?
+  failureReason     String?
+  refundedPaise     Int           @default(0)
+  /// Idempotency-Key header ka hash
+  idempotencyKey    String        @unique
+  expiresAt         DateTime
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([providerOrderId])
+}
+
+// ---------------------------------------------------------------------------
+// Webhook dedupe — provider dobara bheje to dobara process na ho
+// ---------------------------------------------------------------------------
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  provider    String        @default("razorpay")
+  /// provider ka unique delivery id (x-razorpay-event-id). Unique = duplicate protection.
+  eventId     String        @unique
+  eventType   String
+  payload     Json
+  status      WebhookStatus @default(RECEIVED)
+  error       String?
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+
+  @@index([provider, eventType])
+}

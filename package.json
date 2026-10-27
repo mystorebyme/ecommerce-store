@@ -1,1 +1,19 @@
-{}
+{
+  "name": "youpi-store",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/api",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "api:dev": "npm run dev -w @youpi/api",
+    "api:build": "npm run build -w @youpi/api",
+    "api:test": "npm test -w @youpi/api",
+    "api:typecheck": "npm run typecheck -w @youpi/api",
+    "prisma:generate": "npm run prisma:generate -w @youpi/api"
+  }
+}

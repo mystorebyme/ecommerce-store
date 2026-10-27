@@ -17,7 +17,21 @@
   - Static export build (18 routes) — Vercel par bina server chalta hai
   - Guide: `docs/12-demo/demo-suite.md`, app README: `apps/youpi-demo/README.md`
 
+- **Asli payments slice (real money) — `apps/api`** ✅
+  - `POST /api/v1/orders`: price DB se (client se nahi), stock atomic decrement + rollback, `Idempotency-Key`
+  - `POST /api/v1/payments/intents`: Razorpay order + **per-order single-use UPI QR**, 5 min TTL
+  - `GET /api/v1/payments/:id`: status + server-side provider verify (missed webhook ka safety net)
+  - `POST /api/v1/payments/:id/verify`: checkout HMAC verify → provider se `captured` confirm
+  - `POST /api/v1/payments/:id/refund`: partial/full refund, DB CHECK ke saath
+  - `POST /api/v1/webhooks/razorpay`: raw body + HMAC + `x-razorpay-event-id` dedupe + amount match
+  - Provider adapter pattern (`PaymentProvider`) — Razorpay + fake (tests)
+  - Prisma models (`Product`, `Order`, `OrderItem`, `Payment`, `WebhookEvent`) + SQL constraints
+  - 29 tests (`npm run api:test`) — HTTP + asli HMAC, Postgres ki zarurat nahi
+  - Docs: `payment-flow`, `payment-status-api`, `webhooks`, `payment-security`, `go-live-checklist`
+
 ## Next
 
-- Phase 1 backend modules (`STRUCTURE.md` ke `[P1]` module) — `apps/api`.
+- Phase 1 ke baaki modules: auth/users, addresses, cart, inventory (reservation), shipping, invoices, consents, audit-logs.
+- Demo storefront (`apps/youpi-demo`) ko `apps/api` se jodna (asli QR + status polling) — abhi demo simulated hai.
+- Rate limiting + RBAC admin routes + reconciliation scheduler.
 - `docs/` ke placeholder files ko asli content se bharna (requirement → architecture → data → UI → API → security).

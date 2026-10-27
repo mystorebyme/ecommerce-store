@@ -1,1 +1,36 @@
-{}
+{
+  "name": "@youpi/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "YouPI store API \u2014 orders, payments (Razorpay UPI QR), webhooks",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/server.js --external:@prisma/client",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/utils/money.test.ts src/modules/payments/payments.test.ts src/modules/orders/orders.test.ts src/webhooks/razorpay.webhook.test.ts",
+    "prisma:generate": "prisma generate --schema ../../database/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema ../../database/prisma/schema.prisma",
+    "prisma:deploy": "prisma migrate deploy --schema ../../database/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0",
+    "@youpi/validation": "*",
+    "cors": "2.8.5",
+    "dotenv": "16.4.5",
+    "express": "4.21.2",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.17",
+    "@types/express": "4.17.21",
+    "@types/node": "22.7.5",
+    "esbuild": "0.24.0",
+    "prisma": "5.22.0",
+    "tsx": "4.19.1",
+    "typescript": "5.6.3"
+  }
+}
