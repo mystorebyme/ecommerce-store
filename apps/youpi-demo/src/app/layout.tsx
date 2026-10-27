@@ -1,23 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 import { DemoProvider } from "@/lib/store";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-
-const display = localFont({
-  src: "../../public/fonts/sora.woff2",
-  variable: "--font-display",
-  weight: "100 800",
-  display: "swap",
-});
-
-const body = localFont({
-  src: "../../public/fonts/dm-sans.woff2",
-  variable: "--font-body",
-  weight: "100 1000",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -51,7 +36,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-IN" className={`${display.variable} ${body.variable}`}>
+    <html lang="en-IN">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap"
+        />
+      </head>
       <body>
         <DemoProvider>
           <a

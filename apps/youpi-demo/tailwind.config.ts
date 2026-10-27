@@ -33,8 +33,8 @@ const config: Config = {
         info: "#28598C",
       },
       fontFamily: {
-        display: ["var(--font-display)", "Sora", "system-ui", "sans-serif"],
-        sans: ["var(--font-body)", "DM Sans", "system-ui", "sans-serif"],
+        display: ["Sora", "var(--font-display)", "system-ui", "sans-serif"],
+        sans: ["DM Sans", "var(--font-body)", "system-ui", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       boxShadow: {

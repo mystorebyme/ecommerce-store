@@ -133,7 +133,7 @@ Poora contract: `/docs` route (API, SDK, webhook verify in Node/Python/PHP, erro
 - Tokens: `apps/youpi-demo/tailwind.config.ts` — `ink`, `paper`, `line`, `brand`, `accent`, `ok/bad/warn/info`.
 - White-label live demo: `/admin/branding` — naam, tagline, colour, logo mark, support email/phone,
   guarantee line. Colour change karke `/checkout` kholo, header turant badal jayega.
-- Fonts: Sora (display) + DM Sans (body), self-hosted `public/fonts`.
+- Fonts: Sora (display) + DM Sans (body) via Google Fonts with `system-ui` fallback.
 
 ---
 

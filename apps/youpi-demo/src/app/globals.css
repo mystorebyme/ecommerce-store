@@ -4,6 +4,8 @@
 
 :root {
   --grid-line: rgba(12, 17, 22, 0.055);
+  --font-display: "Sora";
+  --font-body: "DM Sans";
 }
 
 @layer base {
