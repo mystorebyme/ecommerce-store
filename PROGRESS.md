@@ -4,6 +4,8 @@
 
 - **Folder structure v4** (Step 0) — poora tree placeholders ke saath.
 - **Docs skeletons** (Step 1–11) — `docs/00-overview` se `docs/11-maintenance` tak files bani hui hain (content TODO).
+- **Demo live on Vercel** — https://youpi-payments-demo.vercel.app (project `youpi-payments-demo`,
+  root dir `apps/youpi-demo`, framework Next.js, static export, koi env var nahi)
 - **Demo suite (new)** — `apps/youpi-demo`: ek chalta-hua, clickable payment demo
   - Storefront + cart + coupon + pincode check (`/store`)
   - WhatsApp OTP gate, dynamic UPI QR, 5:00 / 0:30 server-authoritative timers (`/checkout`)
@@ -17,6 +19,5 @@
 
 ## Next
 
-- Demo ko Vercel par deploy karke URL note karna (steps `docs/12-demo/demo-suite.md` §4).
 - Phase 1 backend modules (`STRUCTURE.md` ke `[P1]` module) — `apps/api`.
 - `docs/` ke placeholder files ko asli content se bharna (requirement → architecture → data → UI → API → security).

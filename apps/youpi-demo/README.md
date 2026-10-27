@@ -4,6 +4,8 @@ A single, self-contained, **fully static** Next.js app that demonstrates the com
 experience end to end — storefront, WhatsApp OTP checkout, dynamic UPI QR, single-slot FIFO queue,
 bank-observer verification, signed webhooks, outcome pages, merchant admin console and integration docs.
 
+**Live:** https://youpi-payments-demo.vercel.app
+
 > Everything runs in the browser against a seeded sandbox ledger. **No real money moves** and no bank,
 > UPI or merchant account is connected.
 

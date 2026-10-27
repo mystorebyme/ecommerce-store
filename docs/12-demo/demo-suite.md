@@ -153,6 +153,31 @@ Poora contract: `/docs` route (API, SDK, webhook verify in Node/Python/PHP, erro
 
 ## 9. Deploy hone ke baad
 
-1. Vercel URL ko `README.md` (root) aur is file me note karo.
-2. Client ko 3 link bhejo: `/demo-pack`, `/admin`, `/docs`.
-3. Demo se pehle footer → **Reset demo data** dabao taaki ledger clean ho.
+### Live URL (deployed 2026-10-28)
+
+**https://youpi-payments-demo.vercel.app**
+
+| Field | Value |
+|-------|-------|
+| Vercel project | `youpi-payments-demo` (`prj_1DGNyJiABA6izlyOHCdT0Crbywce`) |
+| Repo / branch | `mystorebyme/ecommerce-store` · `arena/511a7f0c-ecommerce-store` |
+| Root directory | `apps/youpi-demo` |
+| Framework | Next.js (auto) |
+| Build / output | `npm run build` / `out` |
+| Env vars | koi nahi (pure static demo) |
+| Build time | ~30 s (install 6 s + build ~20 s) |
+
+Verified links: `/`, `/store/`, `/checkout/`, `/outcomes/`, `/demo-pack/`, `/admin/` (+9 tabs), `/docs/`.
+
+Redeploy kaise karein:
+
+```bash
+cd apps/youpi-demo
+npx vercel --prod --yes        # live project par naya production deploy
+```
+
+Client ko bhejne ke liye 3 link kaafi hain: `/store/` (buyer journey), `/admin/` (merchant view),
+`/docs/` (engineering handover). Poora walkthrough `/demo-pack/` se shuru karo.
+
+1. Client ko 3 link bhejo: `/demo-pack`, `/admin`, `/docs`.
+2. Demo se pehle footer → **Reset demo data** dabao taaki ledger clean ho.

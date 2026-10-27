@@ -1,7 +1,23 @@
 # E-commerce store (India) — YouPI-style payments + storefront monorepo
 
 > Purpose: Project intro, structure, aur chalane ke commands
-> Status: Demo suite ready (`apps/youpi-demo`); baaki modules placeholder hain
+> Status: Demo suite live hai → **https://youpi-payments-demo.vercel.app** (`apps/youpi-demo`); baaki modules placeholder hain
+
+## 🔴 Live demo
+
+**https://youpi-payments-demo.vercel.app**
+
+| Screen | Link |
+|--------|------|
+| Overview / landing | [/](https://youpi-payments-demo.vercel.app/) |
+| Merchant storefront | [/store/](https://youpi-payments-demo.vercel.app/store/) |
+| Checkout (WhatsApp OTP → QR → timers) | [/checkout/](https://youpi-payments-demo.vercel.app/checkout/) |
+| 5 outcome pages | [/outcomes/](https://youpi-payments-demo.vercel.app/outcomes/) |
+| One-click demo pack | [/demo-pack/](https://youpi-payments-demo.vercel.app/demo-pack/) |
+| Admin console (9 tabs) | [/admin/](https://youpi-payments-demo.vercel.app/admin/) |
+| Integration docs | [/docs/](https://youpi-payments-demo.vercel.app/docs/) |
+
+Client call ke liye 5-minute script: [`docs/12-demo/demo-suite.md`](docs/12-demo/demo-suite.md).
 
 ## Isme kya hai
 
@@ -28,11 +44,19 @@ Routes: `/` overview · `/store` storefront · `/checkout` OTP + QR · `/outcome
 
 Sab kuch browser ke sandbox ledger par chalta hai — koi real paisa move nahi hota.
 
-## Vercel par deploy
+## Vercel par deploy (already deployed)
+
+**Live URL:** https://youpi-payments-demo.vercel.app
+
+Vercel project: `youpi-payments-demo` (`prj_1DGNyJiABA6izlyOHCdT0Crbywce`) — repo
+`mystorebyme/ecommerce-store`, branch `arena/511a7f0c-ecommerce-store`, **Root Directory = `apps/youpi-demo`**,
+framework Next.js, build `npm run build`, output `out`, koi env var nahi.
+
+Kuch badal ke dobara deploy karna ho:
 
 ```bash
 cd apps/youpi-demo
-npx vercel --prod
+npx vercel --prod          # ya Vercel dashboard → Deployments → Redeploy
 ```
 
 Ya GitHub repo import karke **Root Directory = `apps/youpi-demo`** set karo.
