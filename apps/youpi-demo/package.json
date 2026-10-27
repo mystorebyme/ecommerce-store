@@ -1,0 +1,28 @@
+{
+  "name": "@youpi/demo-suite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "YouPI Payments — live demo suite: merchant store, sandbox checkout, outcome pages, admin console and developer docs",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "npx --yes serve out -l 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.15",
+    "qrcode": "1.5.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.5",
+    "@types/qrcode": "1.5.5",
+    "@types/react": "18.3.11",
+    "@types/react-dom": "18.3.1",
+    "autoprefixer": "10.4.20",
+    "postcss": "8.4.47",
+    "tailwindcss": "3.4.13",
+    "typescript": "5.6.3"
+  }
+}
