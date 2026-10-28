@@ -16,9 +16,17 @@ technically personal account se bhi UPI receive hota hai.
 
 ## 1. VPA + secrets taiyar karo
 
+Ek command kaafi hai (secrets khud generate hote hain, `.env` gitignored + chmod 600):
+
 ```bash
-cp .env.example apps/api/.env
+./scripts/setup-env.sh --vpa 9876543210@ptsbi --name "Your Store"
 ```
+
+Ya manually `cp .env.example apps/api/.env` karke bharo.
+
+**VPA pehle test karo:** `upi-test-qr.html` (repo ke bahar) ya apne UPI app se ₹1 khud ko bhejo.
+Agar "receiver cannot accept payments" aaye to usi number ka doosra handle use karo
+(`@ybl` PhonePe, `@okhdfcbank`, `@okicici`, `@okaxis`). `@ptsbi` = Paytm Payments Bank handle.
 
 `.env` me:
 
@@ -59,6 +67,8 @@ Checklist:
 - [ ] App sirf bank sender ke SMS padhe, body ko **raw** POST kare + `x-observer-signature`
 - [ ] Deliverable `messageId` = SMS timestamp + hash (unique)
 - [ ] Test: apne aap ko ₹1 bhejo → `BankObservation` row + `GET /payments/:id` me credit dikhe
+- [ ] **Fallback ready:** `POST /admin/sessions/:id/confirm` (`x-admin-token`) — bank app me paisa
+      dikhe par SMS na aaye to isi se confirm karo (audit ke saath). Live board: `GET /admin/sessions`
 - [ ] Backup observer: Gmail filter (bank sender) → Apps Script → same endpoint (source `GMAIL`)
 - [ ] Simulator se pehle verify kar lo: `npx tsx scripts/observer-simulator.ts pay <sessionId>`
 

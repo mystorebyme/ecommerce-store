@@ -216,6 +216,8 @@ export interface Db {
   findSessionById(id: string): Promise<SessionRow | null>;
   listSessionsForOrder(orderId: string): Promise<SessionRow[]>;
   listSessionsByStatus(merchantId: string, status: SessionStatus): Promise<SessionRow[]>;
+  /** Admin ops screen: ek se zyada status, sabse purane pehle. */
+  listSessionsByStatuses(merchantId: string, statuses: SessionStatus[], limit: number): Promise<SessionRow[]>;
   updateSession(id: string, patch: Partial<SessionPatch> & { status?: SessionStatus }): Promise<void>;
   /** ACTIVE sessions jinka pay window nikal gaya. */
   findExpiredActiveSessions(now: Date): Promise<SessionRow[]>;
@@ -233,6 +235,8 @@ export interface Db {
   // Outbound webhooks
   createDelivery(record: CreateDeliveryRecord): Promise<DeliveryRow>;
   dueDeliveries(now: Date, limit: number): Promise<DeliveryRow[]>;
+  listDeliveries(status: DeliveryStatus, limit: number): Promise<DeliveryRow[]>;
+  findDeliveryByDeliveryId(deliveryId: string): Promise<DeliveryRow | null>;
   recordDeliveryAttempt(
     id: string,
     result: {
@@ -349,6 +353,14 @@ export function createPrismaDb(prismaClient?: unknown): Db {
     async updateSession(id, patch) {
       await prisma.paymentSession.update({ where: { id }, data: patch });
     },
+    async listSessionsByStatuses(merchantId, statuses, limit) {
+      const rows = await prisma.paymentSession.findMany({
+        where: { merchantId, status: { in: statuses } },
+        orderBy: [{ createdAt: "asc" }],
+        take: limit,
+      });
+      return rows.map(mapSession);
+    },
     async findExpiredActiveSessions(now) {
       const rows = await prisma.paymentSession.findMany({
         where: { status: "ACTIVE", payExpiresAt: { lte: now } },
@@ -408,6 +420,18 @@ export function createPrismaDb(prismaClient?: unknown): Db {
         take: limit,
       });
       return rows.map(mapDelivery);
+    },
+    async listDeliveries(status, limit) {
+      const rows = await prisma.outboundWebhook.findMany({
+        where: { status },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      });
+      return rows.map(mapDelivery);
+    },
+    async findDeliveryByDeliveryId(deliveryId) {
+      const row = await prisma.outboundWebhook.findUnique({ where: { deliveryId } });
+      return row ? mapDelivery(row) : null;
     },
     async recordDeliveryAttempt(id, result) {
       await prisma.outboundWebhook.update({

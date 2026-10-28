@@ -14,6 +14,10 @@
 | `GET` | `/payments/order/:orderId/attempts` | Us order ke saare tries |
 | `POST` | `/observers/observations` | **Observer only** — bank credit (HMAC signed) |
 | `POST` | `/admin/merchant` | VPA/webhook config (`x-admin-token`) |
+| `GET` | `/admin/sessions` | **Live board** — kaun pay kar raha hai + countdown |
+| `POST` | `/admin/sessions/:id/confirm` | **Manual confirm** (bank app me paisa dikha, SMS nahi aaya) |
+| `GET` | `/admin/deliveries` | Merchant webhook deliveries (PENDING/DELIVERED/FAILED) |
+| `POST` | `/admin/deliveries/:id/replay` | Webhook delivery dobara bhejo |
 | `GET` | `/health` | Gateway + merchant config ki jhalak |
 
 ---
@@ -203,7 +207,54 @@ Response me secret kabhi wapas nahi aata — sirf `webhookSecretSet: true/false`
 
 ---
 
-## 7. `GET /health`
+## 7. Admin ops (`x-admin-token`)
+
+### 7.1 `GET /admin/sessions?status=ACTIVE,QUEUED,PROCESSING&limit=50`
+
+Live board — timers pehle evaluate hote hain, phir list:
+
+```json
+{
+  "data": [
+    {
+      "sessionId": "ses_0003",
+      "orderId": "order_0002",
+      "amountPaise": 189900,
+      "reference": "YPVVS00JCV5",
+      "status": "ACTIVE",
+      "utr": null,
+      "payExpiresAt": "2026-10-28T09:05:00.000Z",
+      "secondsLeftToPay": 300,
+      "secondsLeftToVerify": null,
+      "createdAt": "2026-10-28T09:00:00.000Z"
+    }
+  ],
+  "meta": { "count": 1, "statuses": ["ACTIVE", "QUEUED", "PROCESSING"] }
+}
+```
+
+### 7.2 `POST /admin/sessions/:id/confirm` — manual proof
+
+Jab bank app me credit dikh raha ho par observer (SMS/email) na aaya ho:
+
+```json
+{ "utr": "412345678901", "amountPaise": 189900, "senderVpa": "aarav@oksbi", "note": "Paytm app me dikha" }
+```
+
+- `utr` **zaroori** (9–18 digits) — yahi reconciliation ka proof hai.
+- `amountPaise` optional; diya aur session se match nahi hua → `409 ORDER_AMOUNT_MISMATCH`.
+- Session `QUEUED | ACTIVE | PROCESSING` ho tabhi confirm hota hai (otherwise `409`).
+- Ye ek `BankObservation` (source `MANUAL`, status `MATCHED`) bhi banata hai, isliye ledger 1:1 rehta hai.
+- Already `SUCCESS` → `meta.alreadyConfirmed: true` (idempotent).
+
+### 7.3 `GET /admin/deliveries?status=PENDING|DELIVERED|FAILED` aur `POST /admin/deliveries/:deliveryId/replay`
+
+Merchant webhook ki har delivery ka status, attempts, last status code. `replay` us delivery ko
+turant dobara bhejta hai (signature wahi HMAC, delivery-id wahi — merchant dedupe kar sakta hai).
+
+---
+
+## 8. `GET /health`
 
 ```json
 {

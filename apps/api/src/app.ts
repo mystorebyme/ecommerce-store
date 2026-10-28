@@ -115,7 +115,16 @@ export function createApp(deps: AppDeps): AppHandles {
     });
   });
 
-  app.use("/api/v1/admin", createAdminRouter(deps.db, deps.adminToken));
+  app.use(
+    "/api/v1/admin",
+    createAdminRouter({
+      db: deps.db,
+      gateway,
+      merchantWebhooks,
+      adminToken: deps.adminToken,
+      now: deps.now,
+    }),
+  );
   app.use("/api/v1/orders", ordersRouter);
   app.use("/api/v1/payments", createPaymentsRouter(payments));
   app.use("/api/v1/observers", createObserversRouter(deps.db));

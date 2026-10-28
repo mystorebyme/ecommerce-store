@@ -96,7 +96,22 @@ export const observationSchema = z
     path: ["rawText"],
   });
 
+/**
+ * Admin manual confirm — jab bank app me paisa dikhe par observer ne SMS/email na bheja ho.
+ * UTR zaroori hai (reconciliation ke liye); amount optional (mismatch par server reject karega).
+ */
+export const manualConfirmSchema = z.object({
+  utr: z
+    .string()
+    .trim()
+    .regex(/^[0-9]{9,18}$/, "UTR / RRN 9-18 digits ka hota hai (bank app → transaction details)"),
+  amountPaise: paiseSchema.optional(),
+  senderVpa: vpaSchema.optional(),
+  note: z.string().trim().max(200).optional(),
+});
+
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export type StartPaymentInput = z.infer<typeof startPaymentSchema>;
 export type MerchantConfigInput = z.infer<typeof merchantConfigSchema>;
 export type ObservationInput = z.infer<typeof observationSchema>;
+export type ManualConfirmInput = z.infer<typeof manualConfirmSchema>;

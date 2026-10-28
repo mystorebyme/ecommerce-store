@@ -200,6 +200,12 @@ export function createMemoryDb(options: { now?: () => Date } = {}): MemoryDb {
       if (patch.settledAt !== undefined) session.settledAt = patch.settledAt;
       if (patch.payExpiresAt !== undefined) session.payExpiresAt = patch.payExpiresAt;
     },
+    async listSessionsByStatuses(merchantId, statuses, limit) {
+      return [...sessions.values()]
+        .filter((session) => session.merchantId === merchantId && statuses.includes(session.status))
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .slice(0, limit);
+    },
     async findExpiredActiveSessions(at) {
       return [...sessions.values()].filter(
         (session) => session.status === "ACTIVE" && session.payExpiresAt.getTime() <= at.getTime(),
@@ -291,6 +297,15 @@ export function createMemoryDb(options: { now?: () => Date } = {}): MemoryDb {
       return deliveries
         .filter((row) => row.status === "PENDING" && row.nextAttemptAt.getTime() <= at.getTime())
         .slice(0, limit);
+    },
+    async listDeliveries(status, limit) {
+      return deliveries
+        .filter((row) => row.status === status)
+        .slice(-limit)
+        .reverse();
+    },
+    async findDeliveryByDeliveryId(deliveryId) {
+      return deliveries.find((row) => row.deliveryId === deliveryId) ?? null;
     },
     async recordDeliveryAttempt(deliveryId, result) {
       const row = deliveries.find((delivery) => delivery.id === deliveryId);

@@ -579,6 +579,8 @@ ecommerce-store/
 │       ├── index.ts   # Schemas export  [Step 8]
 │       └── package.json   # Package config  [Step 8]
 ├── scripts/   # Dev helper scripts (setup, lint-all, generate-types)  [Step 8]
+│   ├── setup-env.sh   # .env + secrets generate (VPA set) — gitignored  [Step 8]
+│   ├── observer-simulator.ts   # Bank observer simulator: health / pay / flow / admin  [Step 8]
 │   └── setup.sh   # Ek command me project setup  [Step 8]
 ├── tests/   # Cross-app tests (unit tests apne module ke saath hain)  [Step 9]
 │   ├── integration/   # API + database integration tests  [Step 9]

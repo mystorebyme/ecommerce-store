@@ -71,12 +71,14 @@ Demo (upar wala) **simulated** hai. Asli paisa lene wala code `apps/api` me hai 
 verification bank observer (Android SMS / Gmail / Messages) se hoti hai. Zero platform fee.
 
 ```bash
+# 0. Ek script se .env (secrets generate + VPA set) — gitignored rehta hai
+./scripts/setup-env.sh --vpa <aapka-vpa>@<bank> --name "Your Store"
+
 # 1. DB + tables + merchant + products
 docker compose up -d postgres
 npm install && npm run prisma:generate
 npx prisma migrate deploy --schema database/prisma/schema.prisma
 psql "$DATABASE_URL" -f database/sql/constraints.sql
-cp .env.example apps/api/.env      # MERCHANT_VPA, OBSERVER_SHARED_SECRET, ADMIN_API_TOKEN...
 npx tsx database/seeds/seed.ts
 
 # 2. API
@@ -97,6 +99,8 @@ Endpoints:
 | `POST` | `/api/v1/payments/:id/cancel` | Slot chhodo → agla buyer ACTIVE |
 | `POST` | `/api/v1/observers/observations` | Bank credit (HMAC signed) → match → PAID |
 | `POST` | `/api/v1/admin/merchant` | VPA + webhook config (`x-admin-token`) |
+| `GET` | `/api/v1/admin/sessions` | Live board — kaun pay kar raha hai, kitna time bacha |
+| `POST` | `/api/v1/admin/sessions/:id/confirm` | Manual confirm (SMS na aaye to bank app se proof) |
 
 Kaise kaam karta hai (ek line): **QR aapke VPA par → buyer pay karta hai → bank SMS observer
 bhejta hai → exact amount + UTR match → order PAID → merchant ko HMAC-signed webhook.**

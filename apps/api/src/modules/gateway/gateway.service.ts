@@ -4,6 +4,7 @@
 // Yahan "gateway" ka matlab: hamara apna self-hosted UPI gateway (koi Razorpay/PayU
 // nahi). Paisa buyer → merchant ke apne VPA. Hamara kaam sirf attribution + proof.
 
+import { randomBytes } from "node:crypto";
 import type { Db, MerchantRow, OrderWithItems, SessionRow } from "../../config/db";
 import { AppError } from "../../middlewares/error.middleware";
 import { buildQrSvg, buildUpiString, svgToDataUrl } from "./gateway.qr";
@@ -61,10 +62,14 @@ export function createGatewayService({ db, now = () => new Date(), onSettled, on
     return merchant;
   }
 
-  function referenceFor(at: Date, salt: string): string {
-    // 6-20 chars, uppercase alnum — bank statement me padhne layak
+  /**
+   * Order ka short reference — QR ke `tn` note me jaata hai (bank statement me yahi dikhta hai).
+   * 6-20 chars, uppercase alnum. Random suffix isliye ki ek hi millisecond ke do sessions
+   * kabhi collide na karein (same amount wale buyers ka attribution isi par tika hai).
+   */
+  function referenceFor(at: Date): string {
     const base = at.getTime().toString(36).toUpperCase().slice(-5);
-    const tail = salt.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 4).padEnd(4, "X");
+    const tail = randomBytes(3).toString("hex").toUpperCase().slice(0, 5);
     return `YP${base}${tail}`;
   }
 
@@ -130,7 +135,7 @@ export function createGatewayService({ db, now = () => new Date(), onSettled, on
       const queued = await db.listSessionsByStatus(merchant.id, "QUEUED");
       const isActiveSlotFree = active.length < Math.max(1, merchant.slotConcurrency);
 
-      const reference = referenceFor(now(), order.number.slice(-4));
+      const reference = referenceFor(now());
       const upiString = buildUpiString({
         vpa: merchant.vpa,
         payeeName: merchant.payeeName,

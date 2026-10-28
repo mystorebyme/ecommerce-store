@@ -33,6 +33,9 @@ export class AppError extends Error {
   static unauthorized(code: string, message: string) {
     return new AppError(401, code, message);
   }
+  static forbidden(code: string, message: string) {
+    return new AppError(403, code, message);
+  }
   static unavailable(code: string, message: string, details?: unknown) {
     return new AppError(503, code, message, details);
   }
