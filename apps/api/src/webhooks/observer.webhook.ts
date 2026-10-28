@@ -4,8 +4,13 @@
 // POST karta hai. Raw body + HMAC `x-observer-signature` verify hoti hai
 // (`OBSERVER_SHARED_SECRET`), phir `observers.service` match/settle karta hai.
 //
-// Rule: ye endpoint bina signature ke kuch accept nahi karta — warna koi bhi
+// Rule: ye endpoint bina proof ke kuch accept nahi karta — warna koi bhi
 // "₹1,899 credited" bhej kar free order le sakta hai.
+//
+// Do auth modes:
+//   1. `x-observer-signature: sha256=<hmac>` — default (hamara Android app / Apps Script)
+//   2. `x-observer-token: <OBSERVER_SHARED_SECRET>` — generic SMS-forwarder apps ke liye
+//      (jo HMAC nahi kar sakte). Kamzor hai: sirf HTTPS + rotate karte raho.
 
 import type { Request, Response } from "express";
 import { AppError } from "../middlewares/error.middleware";
@@ -17,9 +22,11 @@ export interface ObserverWebhookDeps {
   /** Shared secret — observers aur server dono ke paas. */
   secret: string;
   verifySignature: (input: { rawBody: Buffer | string; signature: string | null; secret: string }) => boolean;
+  /** Token mode (generic forwarder apps) — constant-time compare. */
+  verifyToken?: (provided: string | null, secret: string) => boolean;
 }
 
-export function createObserverWebhook({ observers, secret, verifySignature }: ObserverWebhookDeps) {
+export function createObserverWebhook({ observers, secret, verifySignature, verifyToken }: ObserverWebhookDeps) {
   return async function handleObservation(req: Request, res: Response): Promise<void> {
     if (!secret) {
       throw AppError.unavailable(
@@ -29,11 +36,16 @@ export function createObserverWebhook({ observers, secret, verifySignature }: Ob
     }
     const signature = req.header("x-observer-signature") ?? null;
     const rawBody = req.rawBody ?? Buffer.from(JSON.stringify(req.body ?? {}));
+    const queryToken = typeof req.query.token === "string" ? req.query.token : null;
+    const token = req.header("x-observer-token") ?? queryToken;
 
-    if (!verifySignature({ rawBody, signature, secret })) {
+    const signatureOk = verifySignature({ rawBody, signature, secret });
+    const tokenOk = !signatureOk && verifyToken ? verifyToken(token, secret) : false;
+
+    if (!signatureOk && !tokenOk) {
       throw AppError.unauthorized(
         "OBSERVER_SIGNATURE_INVALID",
-        "Observer signature verify nahi hui. Device ne galat secret use kiya?",
+        "Observer proof verify nahi hua. Device ne galat secret/token use kiya?",
       );
     }
 

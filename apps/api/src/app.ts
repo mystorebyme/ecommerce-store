@@ -19,7 +19,7 @@ import { createPaymentsService } from "./modules/payments/payments.service";
 import { createPaymentsRouter } from "./modules/payments/payments.routes";
 import { ordersRouter } from "./modules/orders/orders.routes";
 import { createProductsRouter } from "./modules/products/products.routes";
-import { verifyHmacSha256 } from "./utils/signature";
+import { verifyHmacSha256, verifySharedToken } from "./utils/signature";
 import { createObserverWebhook } from "./webhooks/observer.webhook";
 
 export interface AppDeps {
@@ -29,6 +29,14 @@ export interface AppDeps {
   adminToken: string;
   webOrigin: string;
   now?: () => Date;
+  /**
+   * Serverless (Vercel) ke liye: koi long-running `setInterval` nahi hota, isliye
+   * timers har request par throttled chalaye jaate hain (default: 5s me ek baar).
+   * `server.ts` (long-running host) me iski zarurat nahi — wahan interval chalta hai.
+   */
+  autoSweep?: { intervalMs?: number };
+  /** Runtime info health me dikhane ke liye (db host, platform) — koi secret nahi. */
+  runtime?: { dbHost?: string; platform?: string };
   /** Test/telemetry hooks. */
   onSettled?: (input: Parameters<NonNullable<Parameters<typeof createGatewayService>[0]["onSettled"]>>[0]) => Promise<void> | void;
 }
@@ -81,6 +89,7 @@ export function createApp(deps: AppDeps): AppHandles {
           observers,
           secret: deps.observerSecret,
           verifySignature: verifyHmacSha256,
+          verifyToken: verifySharedToken,
         })(req, res);
       } catch (error) {
         next(error);
@@ -112,6 +121,8 @@ export function createApp(deps: AppDeps): AppHandles {
       verifyWindowSeconds: merchant?.verifyWindowSeconds ?? null,
       observersEnabled: Boolean(deps.observerSecret),
       webhookDelivery: Boolean(merchant?.webhookUrl),
+      dbHost: deps.runtime?.dbHost ?? null,
+      platform: deps.runtime?.platform ?? null,
       time: new Date().toISOString(),
     });
   });
@@ -126,6 +137,22 @@ export function createApp(deps: AppDeps): AppHandles {
       now: deps.now,
     }),
   );
+  // -------------------------------------------------------------------------
+  // Timers bina interval (serverless): har request par throttled sweep.
+  // -------------------------------------------------------------------------
+  if (deps.autoSweep) {
+    const intervalMs = deps.autoSweep.intervalMs ?? 5_000;
+    let lastSweep = 0;
+    app.use("/api/v1", (_req, res, next) => {
+      const nowMs = Date.now();
+      if (nowMs - lastSweep < intervalMs) return next();
+      lastSweep = nowMs;
+      Promise.all([gateway.runTimers(), merchantWebhooks.processDue()])
+        .catch(() => undefined)
+        .finally(() => next());
+    });
+  }
+
   // Public catalog — storefront isse products padhta hai (koi auth nahi).
   app.use("/api/v1/products", createProductsRouter({ db: deps.db }));
   app.use("/api/v1/orders", ordersRouter);

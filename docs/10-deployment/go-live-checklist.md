@@ -115,3 +115,23 @@ Checklist:
 - [ ] Deploy rollback: previous release (`infra/scripts/deploy.sh`), DB migration forward-only
 - [ ] Paisa aaya par system down: bank statement se manually verify + `BankObservation` replay
       (`scripts/observer-simulator.ts pay` jaisa replay endpoint Phase 1 me)
+
+---
+
+## Vercel deployment (serverless) — kya badalta hai
+
+Vercel par **koi long-running process nahi** hota, isliye:
+
+| Cheez | Long-running host (VPS) | Vercel (serverless) |
+|-------|------------------------|---------------------|
+| Timers (QR expiry, webhook retry) | `setTimeout` 5s tick (`server.ts`) | **`autoSweep`** — har request par throttled sweep (5s) |
+| DB connection | normal Postgres URL | **pooler** (`:6543`, `?pgbouncer=true&connection_limit=1&sslmode=require`) |
+| Env | `apps/api/.env` | Vercel → Project → Settings → Environment Variables |
+| Entry | `src/server.ts` | `api/v1/[...path].ts` → `apps/api/src/serverless.ts` |
+
+**Ek chhota trade-off:** serverless me koi traffic na ho to expiry turant nahi hoti — agla
+request aane par sweep chalta hai. Isliye `vercel.json` me ek daily cron (`/api/v1/health`)
+rakha hai, aur storefront har page load par API hit karta hai.
+
+`DATABASE_URL` ke saath `DATABASE_URL_FALLBACK` optional hai — Supabase ke do pooler hosts
+(`aws-0`, `aws-1`) me se jo chale wahi use hota hai; `/api/v1/health` batata hai kaunsa chala.

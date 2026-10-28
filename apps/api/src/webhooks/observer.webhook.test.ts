@@ -197,3 +197,39 @@ function expectActiveOrQueued(): string {
   // Har test independent DB par chalta hai — pehla session ACTIVE hi hoga.
   return "ACTIVE";
 }
+
+test("observer token mode: x-observer-token se credit accept hota hai (forwarder apps)", async () => {
+  const body = JSON.stringify({
+    source: "ANDROID_SMS",
+    deviceId: "forwarder-app-1",
+    messageId: "tok-msg-1",
+    amountPaise: 50000,
+    utr: "555666777888",
+  });
+
+  const response = await fetch(`${baseUrl}/api/v1/observers/observations`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-observer-token": OBSERVER_SECRET },
+    body,
+  });
+
+  assert.equal(response.status, 200);
+  const json = (await response.json()) as { data: { verdict: string } };
+  assert.equal(json.data.verdict, "UNMATCHED"); // koi live session nahi → unmatched (par accepted)
+});
+
+test("observer token mode: galat token 401", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/observers/observations`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-observer-token": "wrong_token_wrong_token" },
+    body: JSON.stringify({
+      source: "ANDROID_SMS",
+      deviceId: "forwarder-app-2",
+      messageId: "tok-msg-2",
+      amountPaise: 1000,
+      utr: "555666777999",
+    }),
+  });
+
+  assert.equal(response.status, 401);
+});

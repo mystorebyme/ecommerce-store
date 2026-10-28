@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm run prisma:generate",
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/v1/health",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

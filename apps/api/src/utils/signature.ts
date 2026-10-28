@@ -27,3 +27,19 @@ export function verifyHmacSha256(input: {
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
+
+/**
+ * Observer ka doosra auth mode: shared token (constant-time compare).
+ *
+ * Kyun: Play Store ke generic SMS-forwarder apps (SMS to URL Forwarder, MacroDroid) HMAC
+ * compute nahi kar sakte — sirf URL + headers bhej sakte hain. Un ke liye `x-observer-token`
+ * (ya `?token=`) support karte hain. Ye HMAC se kamzor hai (token replay ho sakta hai),
+ * isliye HMAC default hai aur token sirf tab use karo jab app HMAC na kar sake.
+ */
+export function verifySharedToken(provided: string | null, secret: string): boolean {
+  if (!provided || !secret) return false;
+  const a = Buffer.from(provided, "utf8");
+  const b = Buffer.from(secret, "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}

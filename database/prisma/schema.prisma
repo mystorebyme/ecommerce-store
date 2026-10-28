@@ -9,6 +9,8 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Vercel/serverless (Amazon Linux 2023) ke liye engine — local `native` bhi rakhna zaroori
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
