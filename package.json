@@ -17,6 +17,7 @@
     "prisma:generate": "npm run prisma:generate -w @youpi/api",
     "api:dev:memory": "tsx scripts/dev-api-memory.ts",
     "web:dev": "npm --prefix apps/web run dev",
-    "web:build": "npm --prefix apps/web run build"
+    "web:build": "npm --prefix apps/web run build",
+    "api:bundle": "npm run bundle:serverless -w @youpi/api"
   }
 }

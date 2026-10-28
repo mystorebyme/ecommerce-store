@@ -4,6 +4,7 @@ node_modules/
 .pnpm-store/
 
 # Build output
+api/_lib/
 .next/
 out/
 dist/
