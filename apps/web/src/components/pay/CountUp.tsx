@@ -7,7 +7,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const easeOutExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
+/** easeOutExpo, par hamesha 0..1 ke andar — negative t par number ulta ho jaata tha. */
+const easeOutExpo = (t: number) => {
+  const clamped = Math.min(1, Math.max(0, t));
+  return clamped >= 1 ? 1 : 1 - Math.pow(2, -10 * clamped);
+};
 
 export function CountUp({
   paise,
@@ -29,11 +33,12 @@ export function CountUp({
       return;
     }
 
-    const start = performance.now();
-    const from = 0;
+    // Double rAF: pehla paint SSR value ke saath hota hai, uske baad animation shuru.
+    let start = 0;
     const tick = (now: number) => {
-      const t = Math.min((now - start) / durationMs, 1);
-      setValue(Math.round(from + (paise - from) * easeOutExpo(t)));
+      if (!start) start = now;
+      const t = Math.min(1, Math.max(0, (now - start) / durationMs));
+      setValue(Math.round(paise * easeOutExpo(t)));
       if (t < 1) frame.current = requestAnimationFrame(tick);
     };
     frame.current = requestAnimationFrame(tick);

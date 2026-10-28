@@ -165,3 +165,21 @@
 **Verify (local, in-memory API + Next dev):** fixed link par tampered ₹1 → ₹500 hi QR me;
 open link min/max ke bahar 400; `maxUses` poori → 409 + `USED_UP`; VPA stage → ₹1 QR (`pa=newshop@okicici`)
 → confirm → `/health` par naya VPA + audit me 3 entries. API tests **73/73**, `tsc` (api+web) ✅, `next build` ✅.
+
+### Live verification (round 5)
+
+- Deploys: API `dpl_7DGHJxCnRuKkekaDbkSY2w4QAZjB` (READY, prod), storefront `dpl_GFaDsVK57u7qNRTNA6uHuTCaUzK5` (READY, prod) — dono commit `af785de`.
+- `GET /api/v1/health` (live) → `ok`, `merchantVpa: 7073448140@ptsbi`, DB host Supabase pooler.
+- `GET /api/v1/pay/links/demoFixedToken1` → `FIXED`, `amountPaise: 50000`, `remainingUses: 5`, payee DB se.
+- `GET /api/v1/pay/limits` + storefront proxy `GET /api/pay/limits` → `min 100` / `max 5000000`.
+- Storefront `/pay/demoFixedToken1` → "Advance booking — Diwali drop", ₹500 locked, payee line.
+- Storefront `/pay/open` → ₹1–₹50,000 amount input + chips.
+- Storefront `/admin/settings` aur `/admin/links` → token gate (sessionStorage) ke saath render.
+- Storefront `/p/prod_kurta?utm_source=wa` → `307 /products/prod_kurta` (UTM preserved).
+- Demo links DB me seed: `demoFixedToken1` (₹500, 5 uses), `demoOpenToken1` (open).
+
+### Bug fix (live par pakda)
+
+- `/pay/<token>` par count-up ek frame ke liye **negative amount** (`₹-1,33,153.42`) dikha raha tha:
+  `easeOutExpo(t)` `t < 0` par 1 se bada ho jaata tha. Fix: `t` ko `0..1` clamp + animation ki
+  `start` value pehle rAF timestamp se (SSR value hi pehla paint). Ab amount kabhi negative nahi ho sakta.
