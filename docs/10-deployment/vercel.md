@@ -45,10 +45,23 @@ Secret ki value kabhi repo me nahi — sirf Vercel env aur `apps/api/.env` (giti
 - **Timers:** koi `setInterval` nahi. `autoSweep` har request par (5s me ek baar) expiry +
   webhook retry chalata hai. `vercel.json` me daily cron (`/api/v1/health`) bhi hai.
 - **Raw body:** `api/v1/[...path].ts` me `bodyParser: false` — warna observer HMAC verify nahi hoti.
-- **Prisma engine:** `binaryTargets = ["native", "rhel-openssl-3.0.x"]`, generate `installCommand` me.
+- **Prisma engine:** `binaryTargets = ["native", "rhel-openssl-3.0.x"]`; generate build step me.
+- **Bundle, not TS tracing:** Vercel ka TypeScript compile workspace imports (`@youpi/validation`
+  symlink) reliably trace nahi karta — lambda module-load par crash ho jaata tha
+  (`FUNCTION_INVOCATION_FAILED`, koi error message nahi). Isliye build step esbuild se
+  `api/_lib/serverless.js` (CJS, sirf `@prisma/client` external) banata hai aur entry use
+  `require` karta hai. Crash ho to jawab me `BOOT_FAILED` + asli message aata hai.
 - **Filesystem read-only** — koi local file upload/log nahi (S3/R2 baad me).
 
 ## Deploy / redeploy
+
+Project settings (dashboard → Settings → Build & Development):
+
+| Setting | Value |
+|---------|-------|
+| Framework | `Express` |
+| Install command | `npm install --include=dev` |
+| Build command | `npm run prisma:generate && npm run api:bundle` |
 
 ```bash
 git push origin arena/511a7f0c-ecommerce-store     # code GitHub par
