@@ -183,3 +183,8 @@ open link min/max ke bahar 400; `maxUses` poori → 409 + `USED_UP`; VPA stage �
 - `/pay/<token>` par count-up ek frame ke liye **negative amount** (`₹-1,33,153.42`) dikha raha tha:
   `easeOutExpo(t)` `t < 0` par 1 se bada ho jaata tha. Fix: `t` ko `0..1` clamp + animation ki
   `start` value pehle rAF timestamp se (SSR value hi pehla paint). Ab amount kabhi negative nahi ho sakta.
+
+CountUp fix ka deploy: storefront `dpl_88igFs584mQdd8w7KusyNrERcjou` (READY, prod alias
+`youpi-store-front.vercel.app`, commit `50c9843`). Live `/pay/demoFixedToken1` par amount ab
+negative nahi — SSR/first paint par seedha ₹500, uske baad 0 → ₹500 count-up (reduced-motion par
+sirf ₹500).
