@@ -127,3 +127,13 @@
 - Verified locally (in-memory API + Next dev): ₹1 order → `amountPaise: 100` → UPI string
   `am=1.00`, replay par wahi session, admin confirm se `SUCCESS`. API tests **61/61** ✅,
   `tsc` (api+web) ✅.
+
+### Live verification (₹1 test)
+
+- `GET /api/v1/products` (live, Supabase) → 5 products, **`prod_test1` @ `pricePaise: 100`** —
+  catalog bootstrap boot par chala; create-only hone se existing 4 products untouched.
+- Storefront `/` → "₹1 ka test payment karo" CTA + ₹1 Test Item card (999 in stock).
+- Storefront `/checkout?product=prod_test1` → **"Pay ₹1 with UPI"**, amount server se 100 paise.
+- Storefront `/admin` → live sessions board (token `sessionStorage`, proxy `/api/admin/*`).
+- Local end-to-end (in-memory API + Next dev): order → QR (`am=1.00`) → observer HMAC POST
+  (`SUCCESS`) → `/checkout/success` par PAID + UTR; admin board se manual confirm bhi verified.
