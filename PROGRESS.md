@@ -104,3 +104,11 @@
   edge middleware hata diya, `_next/static` immutable, product page `generateMetadata`.
 - Verified: `apps/web` build ✅ (home/products `○` static), `tsc` ✅, API tests 58/58 ✅,
   live health + catalog + product page + checkout page ✅.
+
+### Perf round verify (live)
+
+- Product pages ab **build par pre-render** (`generateStaticParams`) — pehla visitor bhi CDN se instant.
+- Product page ka apna `<title>`/description (`generateMetadata`) — SEO + tab instant.
+- `PUBLIC_WEB_URL` API env me store URL par set; API redeploy.
+- Live proof: `GET /api/v1/health` → ok (bom1), storefront `/api/products` → JSON via **edge rewrite**
+  (DB tak round-trip ~1 hop), `/products/prod_shirt` → `Linen Oversized Shirt` title, `/checkout` render ✅.
