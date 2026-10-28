@@ -7,7 +7,7 @@
     }
   ],
   "functions": {
-    "api/v1/[...path].ts": {
+    "api/[...path].ts": {
       "includeFiles": "node_modules/.prisma/client/**"
     }
   }
