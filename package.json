@@ -18,6 +18,7 @@
     "api:dev:memory": "tsx scripts/dev-api-memory.ts",
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",
-    "api:bundle": "npm run bundle:serverless -w @youpi/api"
+    "api:bundle": "npm run bundle:serverless -w @youpi/api",
+    "postinstall": "node scripts/vercel-postinstall.mjs"
   }
 }
