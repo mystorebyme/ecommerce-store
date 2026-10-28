@@ -29,3 +29,5 @@ Format: Date | Decision | Reason | Alternatives
 | 2026-10-28 | Observer webhook me **token mode + plain-text body** | Play Store ke forwarder apps HMAC nahi kar sakte; bina iske gateway "live" nahi hota | Sirf HMAC (custom APK build zaroori hoti), sirf manual confirm (scale nahi) |
 | 2026-10-28 | `messageId` optional, server `sha256(deviceId:rawText)` banata hai | Simple forwarder app unique id nahi deti; isse duplicate SMS fer se settle nahi karta | messageId required (forwarder apps fail) |
 
+| 2026-10-28 | API Vercel par **ek function (`api/gateway.ts`) + rewrite** se serve hota hai | Filesystem catch-all nested paths par 404 de raha tha; rewrite ke baad routing poora Express me rehta hai, naya endpoint add karne par config nahi badalta | `api/v1/[...path].ts` (nested 404), `vercel.json` `builds`/`routes` (deprecated) |
+| 2026-10-28 | Prisma client + serverless bundle **`postinstall`** se bante hain (sirf `VERCEL=1`) | Custom build command par Vercel `api/` functions ignore karta tha; postinstall dono cases me chalta hai aur local install par skip ho jaata hai | Custom `buildCommand` (api/ functions chhoot jaate the) |

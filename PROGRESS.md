@@ -72,3 +72,23 @@
   `deviceId`/`messageId` optional (server content-hash deta hai → dedupe safe). 2 naye tests (58 total).
 - Docs: `docs/10-deployment/vercel.md` (links, env table, redeploy, test commands, observer setup).
 
+
+## 2026-10-28 (2) — REAL STORE LIVE: ₹ payments seedha merchant VPA par
+
+- **Storefront live:** https://youpi-store-front.vercel.app (project `youpi-store-front`,
+  root `apps/web`, `API_URL=https://youpi-gateway-api.vercel.app`). Asli DB se 4 products,
+  asli prices; browser se `/api/*` proxy hi chalta hai (API ka URL expose nahi).
+- **API ab nested routes bhi serve karta hai:** Vercel filesystem routing nested catch-all ko
+  sirf ek segment ke liye match karta tha (`/api/v1/payments/<id>` → platform 404). Fix:
+  `vercel.json` rewrite `/api/v1/(.*)` → `/api/gateway?__rest=$1`, aur `api/gateway.ts`
+  original path wapas jod kar Express ko deta hai (routing 100% Express me).
+- **Build pipeline:** `postinstall` (sirf `VERCEL=1` par) → `prisma generate` + `api:bundle`
+  (esbuild → `api/_lib/serverless.js`, `@prisma/client` external). Build command khaali hi
+  rehta hai — custom build command par Vercel `api/` functions chhod kar "No entrypoint found"
+  dene lagta tha.
+- **Health (live):** `status:"ok"`, `merchantVpa:"7073448140@ptsbi"`,
+  `dbHost:"aws-0-ap-south-1.pooler.supabase.com"` (fallback host chala), `platform:"serverless"`.
+- **Verified live:** `GET /api/v1/products` (4), `GET /api/v1/products/prod_kurta`,
+  storefront home + `/checkout?product=prod_kurta` (₹1,899, "Pay ₹1,899 with UPI").
+- **Ab bacha:** bank-SMS observer phone par (auto-confirm), aur `MERCHANT_WEBHOOK_SECRET` /
+  `PAY_WINDOW_SECONDS` / `VERIFY_WINDOW_SECONDS` env vars.

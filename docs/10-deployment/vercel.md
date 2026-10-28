@@ -1,11 +1,12 @@
 # Vercel deployment — live API (serverless)
 
-> Status: **LIVE** · Project `youpi-gateway-api` · Region `iad1` (Washington DC)
+> Status: **LIVE** · Storefront `youpi-store-front` + API `youpi-gateway-api` · Region `iad1`
 
 ## Links
 
 | Kya | URL |
 |-----|-----|
+| **Storefront (real store)** | `https://youpi-store-front.vercel.app` |
 | API base | `https://youpi-gateway-api.vercel.app/api/v1` |
 | Health | `https://youpi-gateway-api.vercel.app/api/v1/health` |
 | Products | `https://youpi-gateway-api.vercel.app/api/v1/products` |
@@ -48,9 +49,20 @@ Secret ki value kabhi repo me nahi — sirf Vercel env aur `apps/api/.env` (giti
 - **Prisma engine:** `binaryTargets = ["native", "rhel-openssl-3.0.x"]`; generate build step me.
 - **Bundle, not TS tracing:** Vercel ka TypeScript compile workspace imports (`@youpi/validation`
   symlink) reliably trace nahi karta — lambda module-load par crash ho jaata tha
-  (`FUNCTION_INVOCATION_FAILED`, koi error message nahi). Isliye build step esbuild se
+  (`FUNCTION_INVOCATION_FAILED`, koi error message nahi). Isliye `postinstall` esbuild se
   `api/_lib/serverless.js` (CJS, sirf `@prisma/client` external) banata hai aur entry use
   `require` karta hai. Crash ho to jawab me `BOOT_FAILED` + asli message aata hai.
+- **Ek hi function + rewrite:** Vercel ka filesystem routing nested catch-all
+  (`api/v1/[...path].ts`) ko sirf ek segment ke liye match karta tha — `/api/v1/payments/<id>`
+  platform par 404 ho jaata tha. Isliye `vercel.json` me rewrite hai:
+
+  ```json
+  { "source": "/api/v1/(.*)", "destination": "/api/gateway?__rest=$1" }
+  ```
+
+  `api/gateway.ts` `__rest` se original path wapas banata hai aur Express ko de deta hai,
+  to routing poora Express ke haath me rehta hai (naya endpoint add karne par Vercel config
+  chhedne ki zarurat nahi).
 - **Filesystem read-only** — koi local file upload/log nahi (S3/R2 baad me).
 
 ## Deploy / redeploy
@@ -81,6 +93,19 @@ curl -s https://youpi-gateway-api.vercel.app/api/v1/products
 ```
 
 Agar `BOOT_FAILED` aaye to `DATABASE_URL` check karo; `dbHost: null` matlab dono host fail.
+
+## Storefront deployment
+
+| Setting | Value |
+|---------|-------|
+| Project | `youpi-store-front` (`prj_OVdUrjlGP1oldibUR3P2vFaVqrpm`) |
+| Root directory | `apps/web` |
+| Framework | Next.js (storefront ka apna `next build`) |
+| Env | `API_URL=https://youpi-gateway-api.vercel.app` + `NEXT_PUBLIC_STORE_*` |
+
+Browser kabhi API ko direct nahi chhoota — storefront ka route handler `/api/*`
+(`apps/web/src/app/api/[...path]/route.ts`) server-side proxy karta hai. Isse CORS nahi
+chahiye aur API ka URL browser me expose nahi hota.
 
 ## Observer app kaise jodna hai
 
