@@ -1,9 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install && npm run prisma:generate",
   "crons": [
     {
       "path": "/api/v1/health",
       "schedule": "0 3 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/v1/[...path].ts": {
+      "includeFiles": "node_modules/.prisma/client/**"
+    }
+  }
 }
