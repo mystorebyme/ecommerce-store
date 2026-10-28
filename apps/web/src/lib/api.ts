@@ -137,3 +137,35 @@ export async function getSession(id: string): Promise<PaymentSession | null> {
 export function rupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
+
+// ---------------------------------------------------------------- payment links
+export interface PublicLink {
+  token: string;
+  kind: "FIXED" | "OPEN";
+  title: string;
+  note: string;
+  status: "ACTIVE" | "EXPIRED" | "DISABLED" | "USED_UP";
+  amountPaise: number | null;
+  minAmountPaise: number | null;
+  maxAmountPaise: number | null;
+  expiresAt: string | null;
+  remainingUses: number;
+  payee: { name: string; vpa: string };
+}
+
+/** Server-side: link ki sach (amount server se — URL se kabhi nahi). */
+export async function getLink(token: string): Promise<PublicLink | null> {
+  try {
+    return await request<PublicLink>(`/pay/links/${encodeURIComponent(token)}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function getPayLimits(): Promise<{ minAmountPaise: number; maxAmountPaise: number }> {
+  try {
+    return await request<{ minAmountPaise: number; maxAmountPaise: number }>("/pay/limits", {}, 30);
+  } catch {
+    return { minAmountPaise: 100, maxAmountPaise: 5_000_000 };
+  }
+}

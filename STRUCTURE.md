@@ -129,7 +129,10 @@ ecommerce-store/
 │   │   │   │   │   └── page.tsx   # Reports [P2]  [Step 8]
 │   │   │   │   ├── reviews/
 │   │   │   │   │   └── page.tsx   # Review moderation [P2]  [Step 8]
-│   │   │   │   ├── settings/
+│   │   │   │   ├── settings/   # [P1] Admin settings — UPI VPA (stage → ₹1 test → live), limits, audit
+│   │   │   │   │   ├── settings.service.ts   # VPA staging + promote-on-₹1-test + 60s limits cache
+│   │   │   │   │   ├── settings.routes.ts   # /api/v1/admin/settings/* (+ audit)
+│   │   │   │   │   └── settings.test.ts   # settings: staging, ₹1 gate, limits
 │   │   │   │   │   └── page.tsx   # Store settings, shipping, tax, payment  [Step 8]
 │   │   │   │   └── staff/
 │   │   │   │       └── page.tsx   # Staff accounts aur roles (RBAC)  [Step 8]
@@ -278,6 +281,9 @@ ecommerce-store/
 │   │   │   │   │   ├── payments.service.ts   # payments: Business logic  [Step 8]
 │   │   │   │   │   ├── payments.test.ts   # payments: Module tests  [Step 8]
 │   │   │   │   │   ├── checkout.routes.ts   # POST /api/v1/checkout — order + UPI QR ek hi round-trip me
+│   │   │   │   │   ├── links.service.ts   # Payment links — fixed (amount lock) + open (min/max), atomic maxUses
+│   │   │   │   │   ├── links.routes.ts   # /admin/links (CRUD) + /pay/* (public, rate limited)
+│   │   │   │   │   ├── links.test.ts   # links: fixed lock, open limits, expiry, max uses, audit
 │   │   │   │   │   └── checkout.test.ts   # checkout: ₹1 flow + idempotent replay tests
 │   │   │   │   ├── products/   # [P1] Products — public catalog API (list + detail)  [Step 8 = done]
 │   │   │   │   │   ├── products.controller.ts   # products: Request/response handling  [Step 8]
@@ -298,7 +304,10 @@ ecommerce-store/
 │   │   │   │   │   ├── search.schema.ts   # search: API-only schemas (shared rules packages/validation se import)  [Step 8]
 │   │   │   │   │   ├── search.service.ts   # search: Business logic  [Step 8]
 │   │   │   │   │   └── search.test.ts   # search: Module tests  [Step 8]
-│   │   │   │   ├── settings/   # [P1] Store settings: shipping rules, tax, payment toggles
+│   │   │   │   ├── settings/   # [P1] Admin settings — UPI VPA (stage → ₹1 test → live), limits, audit
+│   │   │   │   │   ├── settings.service.ts   # VPA staging + promote-on-₹1-test + 60s limits cache
+│   │   │   │   │   ├── settings.routes.ts   # /api/v1/admin/settings/* (+ audit)
+│   │   │   │   │   └── settings.test.ts   # settings: staging, ₹1 gate, limits   # [P1] Store settings: shipping rules, tax, payment toggles
 │   │   │   │   │   ├── settings.controller.ts   # settings: Request/response handling  [Step 8]
 │   │   │   │   │   ├── settings.routes.ts   # settings: URL routes  [Step 8]
 │   │   │   │   │   ├── settings.schema.ts   # settings: API-only schemas (shared rules packages/validation se import)  [Step 8]
@@ -394,16 +403,24 @@ ecommerce-store/
 │       │   │   ├── pages/
 │       │   │   │   └── [slug]/
 │       │   │   │       └── page.tsx   # About, contact, FAQ  [Step 8]
+│       │   │   ├── pay/   # Payment link pages
+│       │   │   │   ├── [token]/page.tsx   # Fixed/open link checkout (amount server se)
+│       │   │   │   └── open/page.tsx   # "Kuch bhi pay karo" (min/max server-side)
+│       │   │   ├── p/[slug]/page.tsx   # Product short link (UTM pass-through)
 │       │   │   ├── policies/
 │       │   │   │   └── [slug]/
 │       │   │   │       └── page.tsx   # Privacy, terms, refund, shipping policy pages (payment gateway approval ke liye bhi chahiye)  [Step 8]
 │       │   │   ├── layout.tsx   # Root layout (header, footer)  [Step 8]
-│       │   │   ├── admin/   # Merchant ops board (live sessions + manual "mark paid") — temporary, jab tak alag apps/admin nahi banta
-│       │   │   │   └── page.tsx
+│       │   │   ├── admin/   # Merchant ops (temporary, jab tak alag apps/admin nahi banta)
+│       │   │   │   ├── page.tsx   # Live sessions + manual "mark paid"
+│       │   │   │   ├── settings/page.tsx   # UPI VPA (stage → ₹1 test → live), limits, audit log
+│       │   │   │   └── links/page.tsx   # Payment links banao / copy / disable
 │       │   │   ├── not-found.tsx   # 404 page  [Step 8]
 │       │   │   ├── robots.ts   # SEO robots  [Step 8]
 │       │   │   └── sitemap.ts   # SEO sitemap  [Step 8]
 │       │   ├── components/
+│       │   │   ├── admin/   # TokenGate (sessionStorage) + admin widgets
+│       │   │   ├── pay/   # CountUp, ProgressRing, PriceBreakdown (GST donut), LinkPayment, OpenPayment
 │       │   │   ├── checkout/   # Address form, Payment step, Order summary
 │       │   │   │   └── QrPayment.tsx   # QR dikhana + live status (paid/failed/expired) + naya QR button  [Step 8]
 │       │   │   ├── account/   # Account sidebar, Order card  [Step 8]

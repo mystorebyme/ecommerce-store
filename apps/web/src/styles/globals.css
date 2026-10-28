@@ -513,3 +513,116 @@ h3 {
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
 }
+
+/* ------------------------------------------------- payment links + visuals */
+/* Ye saare effects `prefers-reduced-motion` par band ho jaate hain (neeche). */
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent, #0b5e4f);
+  margin-bottom: 6px;
+}
+
+/* Amount hero — count-up number ya editable input */
+.amount-hero {
+  border: 1px solid rgba(12, 17, 22, 0.1);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  background: linear-gradient(180deg, rgba(11, 94, 79, 0.05), rgba(11, 94, 79, 0));
+}
+.amount-big {
+  font-size: clamp(28px, 6vw, 40px);
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 2px 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.input-rupee { display: inline-flex; align-items: center; gap: 4px; }
+.amount-input {
+  font-size: inherit;
+  font-weight: inherit;
+  border: none;
+  background: transparent;
+  padding: 0;
+  width: min(220px, 60vw);
+  color: inherit;
+}
+.amount-input:focus { outline: none; box-shadow: none; }
+
+/* Quick amount chips */
+.chips { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.chip {
+  border: 1px solid rgba(12, 17, 22, 0.16);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.2, 1.6, 0.3, 1), border-color 160ms ease;
+}
+.chip:hover { transform: translateY(-1px) scale(1.02); border-color: var(--accent, #0b5e4f); }
+.chip:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* Payment header + QR entrance */
+.pay-head { display: flex; gap: 16px; align-items: center; }
+.qr-pop { animation: qr-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes qr-in {
+  from { opacity: 0; transform: scale(0.92) translateY(6px); filter: blur(2px); }
+  to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+
+/* Progress ring (countdown) */
+.ring { position: relative; flex: 0 0 auto; }
+.ring-arc { transition: stroke-dashoffset 900ms linear; }
+.ring-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+.ring-waiting .ring-arc { animation: ring-pulse 2.4s ease-in-out infinite; }
+.ring-tick { font-size: 30px; color: var(--ok, #067647); animation: tick-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes ring-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes tick-in {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Price breakdown (donut + legend) */
+.breakdown { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.donut-segment { animation: donut-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes donut-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.breakdown-legend { margin: 0; flex: 1; min-width: 150px; }
+.breakdown-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 2px 0; }
+.breakdown-row dt { display: flex; align-items: center; gap: 6px; color: #4b5563; }
+.breakdown-row dd { margin: 0; font-variant-numeric: tabular-nums; }
+.breakdown-row.total { border-top: 1px solid rgba(12, 17, 22, 0.1); margin-top: 6px; padding-top: 6px; font-weight: 700; }
+.breakdown-note { font-size: 11px; margin: 4px 0 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* Audit log list */
+.audit-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.audit-list li { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+
+/* Spring-y buttons (subtle) */
+.btn { transition: transform 150ms cubic-bezier(0.2, 1.5, 0.3, 1), box-shadow 150ms ease; }
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.99); }
+
+@media (prefers-reduced-motion: reduce) {
+  .qr-pop, .ring-arc, .ring-tick, .donut-segment, .chip, .btn { animation: none !important; transition: none !important; }
+  .ring-waiting .ring-arc { opacity: 1; }
+}

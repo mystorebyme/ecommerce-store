@@ -116,3 +116,70 @@ export type StartPaymentInput = z.infer<typeof startPaymentSchema>;
 export type MerchantConfigInput = z.infer<typeof merchantConfigSchema>;
 export type ObservationInput = z.infer<typeof observationSchema>;
 export type ManualConfirmInput = z.infer<typeof manualConfirmSchema>;
+
+// ---------------------------------------------------------------------------
+// Admin settings (VPA / limits) + payment links
+// ---------------------------------------------------------------------------
+
+/** VPA: `name@bank` — 2..256 chars local part, 2..64 bank handle. */
+export const vpaChangeSchema = z
+  .string()
+  .trim()
+  .min(5)
+  .max(320)
+  .regex(/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/, "VPA format: name@bank (e.g. yourshop@okhdfcbank)");
+
+/** VPA badalne ki request: naya VPA + (optional) payee name + merchant code. */
+export const stageVpaSchema = z.object({
+  vpa: vpaChangeSchema,
+  payeeName: z.string().trim().min(2).max(80).optional(),
+  merchantCode: z.string().trim().regex(/^[0-9]{4,8}$/, "Merchant code 4-8 digits").optional(),
+});
+
+export const settingsLimitsSchema = z
+  .object({
+    minAmountPaise: paiseSchema,
+    maxAmountPaise: paiseSchema,
+  })
+  .refine((value) => value.minAmountPaise <= value.maxAmountPaise, {
+    message: "minAmountPaise maxAmountPaise se bada nahi ho sakta",
+    path: ["minAmountPaise"],
+  });
+
+// ---------------------------------------------------------------------------
+// Payment links
+// ---------------------------------------------------------------------------
+
+export const paymentLinkKindSchema = z.enum(["FIXED", "OPEN"]);
+
+export const createPaymentLinkSchema = z
+  .object({
+    kind: paymentLinkKindSchema,
+    title: z.string().trim().min(3).max(80),
+    note: z.string().trim().min(3).max(40).optional(),
+    /** FIXED: locked amount. OPEN: chhodo (limits settings se aate hain). */
+    amountPaise: paiseSchema.optional(),
+    maxUses: z.number().int().min(1).max(100000).optional(),
+    expiresInHours: z.number().int().min(1).max(24 * 365).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.kind === "FIXED" && !value.amountPaise) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "FIXED link ke liye amountPaise chahiye", path: ["amountPaise"] });
+    }
+    if (value.kind === "OPEN" && value.amountPaise) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "OPEN link me amount fix nahi karte", path: ["amountPaise"] });
+    }
+  });
+
+/** Fixed link par buyer kuch amount nahi bhejta — sirf details. */
+export const startLinkPaymentSchema = z.object({
+  customerName: z.string().trim().min(2).max(80),
+  customerPhone: phoneSchema,
+  /** OPEN link ke liye zaroori; FIXED par ignore (server ka amount jeetta hai). */
+  amountPaise: paiseSchema.optional(),
+});
+
+export type StageVpaInput = z.infer<typeof stageVpaSchema>;
+export type SettingsLimitsInput = z.infer<typeof settingsLimitsSchema>;
+export type CreatePaymentLinkInput = z.infer<typeof createPaymentLinkSchema>;
+export type StartLinkPaymentInput = z.infer<typeof startLinkPaymentSchema>;

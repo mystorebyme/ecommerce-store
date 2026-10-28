@@ -137,3 +137,31 @@
 - Storefront `/admin` → live sessions board (token `sessionStorage`, proxy `/api/admin/*`).
 - Local end-to-end (in-memory API + Next dev): order → QR (`am=1.00`) → observer HMAC POST
   (`SUCCESS`) → `/checkout/success` par PAID + UTR; admin board se manual confirm bhi verified.
+
+## 2026-10-28 (5) — Admin UPI settings, payment links, checkout visuals
+
+**DB (migration `0003`, live Supabase par applied):** `Setting` (KV), `PaymentLink`,
+`AuditLog` (+ append-only trigger jo UPDATE/DELETE block karta hai), `MerchantAccount.merchantCode`,
+`Order.linkId`.
+
+**Admin — UPI settings (`/api/v1/admin/settings/*`)**
+- VPA ab **DB se** aata hai (redeploy nahi): `POST /settings/vpa` sirf **stage** karta hai.
+- `POST /settings/vpa/test` pending VPA par **₹1 ka QR** banata hai (`vpaOverride` sirf isi path par).
+- ₹1 settle hote hi `promoteIfPendingMatches` naya VPA **live** kar deta hai (audit: `verified_by_test`).
+- `POST /settings/limits` open-link min/max; `GET /settings/audit` append-only log.
+
+**Payment links**
+- `FIXED` (amount DB me lock — request ka amount ignore) aur `OPEN` (min/max server-side).
+- Public URL me sirf **token** (`/pay/<token>`); `maxUses` atomic, expiry + disable, `USED_UP`/`EXPIRED` states.
+- `POST /pay/open` (bina link ke), `GET /pay/limits`, `/p/<slug>` short product link (UTM pass-through).
+- `/api/v1/pay/*` par rate limit (20/min/IP per instance).
+
+**Storefront UI**
+- `/pay/[token]`, `/pay/open`, `/admin/settings`, `/admin/links`.
+- Visuals: amount **count-up** (easeOutExpo), **donut** price breakdown (CGST/SGST split), **countdown ring**,
+  QR scale-in, spring buttons — sab `prefers-reduced-motion` respect karte hain.
+- Checkout summary me price breakdown; QR me `tr` (order id) + optional `mc`.
+
+**Verify (local, in-memory API + Next dev):** fixed link par tampered ₹1 → ₹500 hi QR me;
+open link min/max ke bahar 400; `maxUses` poori → 409 + `USED_UP`; VPA stage → ₹1 QR (`pa=newshop@okicici`)
+→ confirm → `/health` par naya VPA + audit me 3 entries. API tests **73/73**, `tsc` (api+web) ✅, `next build` ✅.

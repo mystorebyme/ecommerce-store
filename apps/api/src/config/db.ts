@@ -33,6 +33,8 @@ export interface MerchantRow {
   name: string;
   vpa: string;
   payeeName: string;
+  /** UPI `mc` — bank/PSP ne diya ho to */
+  merchantCode?: string | null;
   webhookUrl: string | null;
   webhookSecret: string | null;
   payWindowSeconds: number;
@@ -61,6 +63,8 @@ export interface OrderItemRow {
 export interface OrderRow {
   id: string;
   number: string;
+  /** Payment link se aaya ho to link id */
+  linkId?: string | null;
   status: OrderStatus;
   amountPaise: number;
   currency: string;
@@ -137,6 +141,72 @@ export interface CreateOrderRecord {
   customerPhone: string;
   idempotencyKey: string;
   items: OrderItemRow[];
+  /** Payment link se aaya ho to link id */
+  linkId?: string | null;
+}
+
+export interface SettingRow {
+  key: string;
+  value: string;
+}
+
+export type PaymentLinkKind = "FIXED" | "OPEN";
+export type PaymentLinkStatus = "ACTIVE" | "DISABLED";
+
+export interface PaymentLinkRow {
+  id: string;
+  token: string;
+  kind: PaymentLinkKind;
+  title: string;
+  note: string;
+  /** FIXED par locked amount (integer paise), OPEN par null */
+  amountPaise: number | null;
+  minAmountPaise: number | null;
+  maxAmountPaise: number | null;
+  status: PaymentLinkStatus;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: Date | null;
+  createdBy: string | null;
+  createdAt: Date;
+}
+
+export interface CreatePaymentLinkRecord {
+  id?: string;
+  token: string;
+  kind: PaymentLinkKind;
+  title: string;
+  note: string;
+  amountPaise: number | null;
+  minAmountPaise?: number | null;
+  maxAmountPaise?: number | null;
+  maxUses?: number;
+  expiresAt?: Date | null;
+  createdBy?: string | null;
+}
+
+export interface AuditLogRow {
+  id: string;
+  actor: string;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  before: string | null;
+  after: string | null;
+  ip: string | null;
+  requestId: string | null;
+  createdAt: Date;
+}
+
+export interface CreateAuditRecord {
+  actor: string;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  before?: string | null;
+  after?: string | null;
+  ip?: string | null;
+  requestId?: string | null;
 }
 
 export interface CreateSessionRecord {
@@ -224,6 +294,32 @@ export interface Db {
   findOrderById(id: string): Promise<OrderWithItems | null>;
   findOrderByIdempotencyKey(key: string): Promise<OrderRow | null>;
   setOrderStatus(orderId: string, status: OrderStatus): Promise<void>;
+
+  // Settings (admin — VPA pending, open-link limits)
+  getSettings(): Promise<SettingRow[]>;
+  setSetting(key: string, value: string): Promise<void>;
+  deleteSetting(key: string): Promise<void>;
+  /** VPA/payee/merchantCode ek saath update (audit caller likhta hai) */
+  updateMerchantProfile(
+    merchantId: string,
+    patch: { vpa?: string; payeeName?: string; merchantCode?: string | null },
+  ): Promise<MerchantRow | null>;
+
+  // Payment links
+  createPaymentLink(record: CreatePaymentLinkRecord): Promise<PaymentLinkRow>;
+  listPaymentLinks(limit: number): Promise<PaymentLinkRow[]>;
+  findPaymentLinkByToken(token: string): Promise<PaymentLinkRow | null>;
+  findPaymentLinkById(id: string): Promise<PaymentLinkRow | null>;
+  updatePaymentLink(
+    id: string,
+    patch: { status?: PaymentLinkStatus; note?: string; expiresAt?: Date | null },
+  ): Promise<PaymentLinkRow | null>;
+  /** Atomic: maxUses ke andar hi usedCount badhta hai (race-safe). */
+  consumePaymentLinkUse(id: string): Promise<boolean>;
+
+  // Audit log (append-only)
+  appendAudit(record: CreateAuditRecord): Promise<void>;
+  listAudit(limit: number, action?: string): Promise<AuditLogRow[]>;
 
   // Payment sessions
   createSession(record: CreateSessionRecord): Promise<SessionRow>;
@@ -356,6 +452,7 @@ export function createPrismaDb(prismaClient?: unknown): Db {
           customerName: record.customerName,
           customerPhone: record.customerPhone,
           idempotencyKey: record.idempotencyKey,
+          ...(record.linkId ? { linkId: record.linkId } : {}),
           items: { create: record.items },
         },
       });
@@ -377,6 +474,117 @@ export function createPrismaDb(prismaClient?: unknown): Db {
       const row = await prisma.paymentSession.create({ data: record });
       return mapSession(row);
     },
+    // ---------------- settings ----------------
+    async getSettings() {
+      const rows = await prisma.setting.findMany();
+      return rows.map((row: any) => ({ key: row.key, value: row.value }));
+    },
+    async setSetting(key, value) {
+      await prisma.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
+    },
+    async deleteSetting(key) {
+      await prisma.setting.deleteMany({ where: { key } });
+    },
+    async updateMerchantProfile(merchantId, patch) {
+      const row = await prisma.merchantAccount.update({
+        where: { id: merchantId },
+        data: {
+          ...(patch.vpa !== undefined ? { vpa: patch.vpa } : {}),
+          ...(patch.payeeName !== undefined ? { payeeName: patch.payeeName } : {}),
+          ...(patch.merchantCode !== undefined ? { merchantCode: patch.merchantCode } : {}),
+        },
+      });
+      return row ? mapMerchant(row) : null;
+    },
+
+    // ---------------- payment links ----------------
+    async createPaymentLink(record) {
+      const row = await prisma.paymentLink.create({
+        data: {
+          ...(record.id ? { id: record.id } : {}),
+          token: record.token,
+          kind: record.kind,
+          title: record.title,
+          note: record.note,
+          amountPaise: record.amountPaise,
+          minAmountPaise: record.minAmountPaise ?? null,
+          maxAmountPaise: record.maxAmountPaise ?? null,
+          maxUses: record.maxUses ?? 1000,
+          expiresAt: record.expiresAt ?? null,
+          createdBy: record.createdBy ?? null,
+        },
+      });
+      return mapPaymentLink(row);
+    },
+    async listPaymentLinks(limit) {
+      const rows = await prisma.paymentLink.findMany({
+        orderBy: { createdAt: "desc" },
+        take: Math.min(Math.max(limit, 1), 200),
+      });
+      return rows.map(mapPaymentLink);
+    },
+    async findPaymentLinkByToken(token) {
+      const row = await prisma.paymentLink.findUnique({ where: { token } });
+      return row ? mapPaymentLink(row) : null;
+    },
+    async findPaymentLinkById(id) {
+      const row = await prisma.paymentLink.findUnique({ where: { id } });
+      return row ? mapPaymentLink(row) : null;
+    },
+    async updatePaymentLink(id, patch) {
+      const row = await prisma.paymentLink.update({
+        where: { id },
+        data: {
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          ...(patch.note !== undefined ? { note: patch.note } : {}),
+          ...(patch.expiresAt !== undefined ? { expiresAt: patch.expiresAt } : {}),
+        },
+      });
+      return row ? mapPaymentLink(row) : null;
+    },
+    async consumePaymentLinkUse(id) {
+      // Ek hi UPDATE: usedCount tabhi badhta hai jab limit bachi ho (race-safe).
+      const affected = await prisma.$executeRaw`
+        UPDATE "PaymentLink" SET "usedCount" = "usedCount" + 1, "updatedAt" = NOW()
+        WHERE "id" = ${id} AND "status" = 'ACTIVE' AND "usedCount" < "maxUses"`;
+      return Number(affected) === 1;
+    },
+
+    // ---------------- audit log ----------------
+    async appendAudit(record) {
+      await prisma.auditLog.create({
+        data: {
+          actor: record.actor,
+          action: record.action,
+          entity: record.entity,
+          entityId: record.entityId ?? null,
+          before: record.before ?? null,
+          after: record.after ?? null,
+          ip: record.ip ?? null,
+          requestId: record.requestId ?? null,
+        },
+      });
+    },
+    async listAudit(limit, action) {
+      const rows = await prisma.auditLog.findMany({
+        where: action ? { action } : undefined,
+        orderBy: { createdAt: "desc" },
+        take: Math.min(Math.max(limit, 1), 200),
+      });
+      return rows.map((row: any) => ({
+        id: row.id,
+        actor: row.actor,
+        action: row.action,
+        entity: row.entity,
+        entityId: row.entityId ?? null,
+        before: row.before ?? null,
+        after: row.after ?? null,
+        ip: row.ip ?? null,
+        requestId: row.requestId ?? null,
+        createdAt: row.createdAt,
+      }));
+    },
+
     async findSessionById(id) {
       const row = await prisma.paymentSession.findUnique({ where: { id } });
       return row ? mapSession(row) : null;
@@ -511,6 +719,7 @@ function mapMerchant(row: any): MerchantRow {
     name: row.name,
     vpa: row.vpa,
     payeeName: row.payeeName,
+    merchantCode: row.merchantCode ?? null,
     webhookUrl: row.webhookUrl ?? null,
     webhookSecret: row.webhookSecret ?? null,
     payWindowSeconds: row.payWindowSeconds ?? 300,
@@ -540,6 +749,26 @@ function mapOrder(row: any): OrderRow {
     customerName: row.customerName,
     customerPhone: row.customerPhone,
     idempotencyKey: row.idempotencyKey,
+    linkId: row.linkId ?? null,
+    createdAt: row.createdAt,
+  };
+}
+
+function mapPaymentLink(row: any): PaymentLinkRow {
+  return {
+    id: row.id,
+    token: row.token,
+    kind: row.kind,
+    title: row.title,
+    note: row.note,
+    amountPaise: row.amountPaise ?? null,
+    minAmountPaise: row.minAmountPaise ?? null,
+    maxAmountPaise: row.maxAmountPaise ?? null,
+    status: row.status,
+    maxUses: row.maxUses,
+    usedCount: row.usedCount,
+    expiresAt: row.expiresAt ?? null,
+    createdBy: row.createdBy ?? null,
     createdAt: row.createdAt,
   };
 }

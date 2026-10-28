@@ -82,8 +82,13 @@ export default function AdminPage() {
   return (
     <main className="container">
       <h1 style={{ fontSize: 26, marginBottom: 6 }}>Admin — live payments</h1>
-      <p className="muted" style={{ marginBottom: 18 }}>
+      <p className="muted" style={{ marginBottom: 10 }}>
         Bank SMS observer na chale to yahan se payment manually confirm karo. Har confirm ka record rehta hai.
+      </p>
+      <p style={{ marginBottom: 18, display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <a href="/admin/settings">⚙️ UPI settings + audit</a>
+        <a href="/admin/links">🔗 Payment links</a>
+        <a href="/pay/open">＋ Open payment page</a>
       </p>
 
       <form className="panel" onSubmit={saveToken} style={{ marginBottom: 18 }}>

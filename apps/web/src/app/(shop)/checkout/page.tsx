@@ -6,6 +6,8 @@
 import Link from "next/link";
 import { QrPayment } from "@/components/checkout/QrPayment";
 import { getProduct, rupees } from "@/lib/api";
+import { CountUp } from "@/components/pay/CountUp";
+import { PriceBreakdown } from "@/components/pay/PriceBreakdown";
 
 // Checkout page halka cached (10s) — price/stock API se, payment khud client banata hai.
 export const revalidate = 10;
@@ -67,8 +69,12 @@ export default async function CheckoutPage({ searchParams }: { searchParams: { p
             </div>
             <div className="summary-row total">
               <span>Total payable</span>
-              <span>{rupees(product.pricePaise)}</span>
+              <span><CountUp paise={product.pricePaise} /></span>
             </div>
+          </div>
+          <div style={{ marginTop: 18 }}>
+            <h3 style={{ fontSize: 14, marginBottom: 8 }}>Price breakdown</h3>
+            <PriceBreakdown input={{ totalPaise: product.pricePaise }} />
           </div>
           <p className="muted" style={{ marginTop: 14 }}>
             Price server par decide hota hai — QR me wahi amount fix ho jaata hai, isliye galat amount ka

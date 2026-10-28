@@ -5,7 +5,10 @@
 // FIFO order, dedupe) taaki test ka matlab bana rahe.
 
 import type {
+  AuditLogRow,
+  CreateAuditRecord,
   CreateDeliveryRecord,
+  CreatePaymentLinkRecord,
   CreateObservationRecord,
   CreateOrderRecord,
   CreateSessionRecord,
@@ -17,9 +20,12 @@ import type {
   OrderRow,
   OrderStatus,
   OrderWithItems,
+  PaymentLinkRow,
+  PaymentLinkStatus,
   ProductRow,
   SessionRow,
   SessionStatus,
+  SettingRow,
 } from "../../apps/api/src/config/db";
 
 export interface MemoryDb extends Db {
@@ -28,6 +34,8 @@ export interface MemoryDb extends Db {
   getSession(id: string): SessionRow | undefined;
   observations: ObservationRow[];
   deliveries: DeliveryRow[];
+  auditLogs: AuditLogRow[];
+  links: PaymentLinkRow[];
 }
 
 export const TEST_MERCHANT: Omit<MerchantRow, "id"> = {
@@ -48,6 +56,9 @@ export function createMemoryDb(options: { now?: () => Date } = {}): MemoryDb {
   const sessions = new Map<string, SessionRow>();
   const observations: ObservationRow[] = [];
   const deliveries: DeliveryRow[] = [];
+  const auditLogs: AuditLogRow[] = [];
+  const links: PaymentLinkRow[] = [];
+  const settings = new Map<string, string>();
   let merchant: MerchantRow | null = null;
   let sequence = 0;
 
@@ -64,6 +75,8 @@ export function createMemoryDb(options: { now?: () => Date } = {}): MemoryDb {
   const db: MemoryDb = {
     observations,
     deliveries,
+    auditLogs,
+    links,
 
     // ---------------- merchant ----------------
     async getMerchant() {
@@ -146,6 +159,7 @@ export function createMemoryDb(options: { now?: () => Date } = {}): MemoryDb {
         customerName: record.customerName,
         customerPhone: record.customerPhone,
         idempotencyKey: record.idempotencyKey,
+        linkId: record.linkId ?? null,
         createdAt: now(),
         items: record.items.map((item): OrderItemRow => ({ ...item })),
       };
@@ -196,6 +210,94 @@ export function createMemoryDb(options: { now?: () => Date } = {}): MemoryDb {
       };
       return persistSession(row);
     },
+    // ---------------- settings ----------------
+    async getSettings(): Promise<SettingRow[]> {
+      return [...settings.entries()].map(([key, value]) => ({ key, value }));
+    },
+    async setSetting(key: string, value: string) {
+      settings.set(key, value);
+    },
+    async deleteSetting(key: string) {
+      settings.delete(key);
+    },
+    async updateMerchantProfile(merchantId, patch) {
+      if (!merchant || merchant.id !== merchantId) return null;
+      merchant = {
+        ...merchant,
+        ...(patch.vpa !== undefined ? { vpa: patch.vpa } : {}),
+        ...(patch.payeeName !== undefined ? { payeeName: patch.payeeName } : {}),
+        ...(patch.merchantCode !== undefined ? { merchantCode: patch.merchantCode } : {}),
+      };
+      return merchant;
+    },
+
+    // ---------------- payment links ----------------
+    async createPaymentLink(record: CreatePaymentLinkRecord) {
+      const row: PaymentLinkRow = {
+        id: record.id ?? id("lnk"),
+        token: record.token,
+        kind: record.kind,
+        title: record.title,
+        note: record.note,
+        amountPaise: record.amountPaise,
+        minAmountPaise: record.minAmountPaise ?? null,
+        maxAmountPaise: record.maxAmountPaise ?? null,
+        status: "ACTIVE",
+        maxUses: record.maxUses ?? 1000,
+        usedCount: 0,
+        expiresAt: record.expiresAt ?? null,
+        createdBy: record.createdBy ?? null,
+        createdAt: now(),
+      };
+      links.push(row);
+      return row;
+    },
+    async listPaymentLinks(limit: number) {
+      return [...links].reverse().slice(0, limit);
+    },
+    async findPaymentLinkByToken(token: string) {
+      return links.find((link) => link.token === token) ?? null;
+    },
+    async findPaymentLinkById(linkId: string) {
+      return links.find((link) => link.id === linkId) ?? null;
+    },
+    async updatePaymentLink(linkId, patch) {
+      const link = links.find((item) => item.id === linkId);
+      if (!link) return null;
+      if (patch.status !== undefined) link.status = patch.status as PaymentLinkStatus;
+      if (patch.note !== undefined) link.note = patch.note;
+      if (patch.expiresAt !== undefined) link.expiresAt = patch.expiresAt;
+      return link;
+    },
+    async consumePaymentLinkUse(linkId: string) {
+      const link = links.find((item) => item.id === linkId);
+      if (!link || link.status !== "ACTIVE" || link.usedCount >= link.maxUses) return false;
+      link.usedCount += 1;
+      return true;
+    },
+
+    // ---------------- audit ----------------
+    async appendAudit(record: CreateAuditRecord) {
+      auditLogs.push({
+        id: id("aud"),
+        actor: record.actor,
+        action: record.action,
+        entity: record.entity,
+        entityId: record.entityId ?? null,
+        before: record.before ?? null,
+        after: record.after ?? null,
+        ip: record.ip ?? null,
+        requestId: record.requestId ?? null,
+        createdAt: now(),
+      });
+    },
+    async listAudit(limit: number, action?: string) {
+      return [...auditLogs]
+        .filter((row) => (action ? row.action === action : true))
+        .reverse()
+        .slice(0, limit);
+    },
+
     async findSessionById(sessionId) {
       return sessions.get(sessionId) ?? null;
     },

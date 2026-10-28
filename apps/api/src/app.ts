@@ -18,6 +18,10 @@ import { createMerchantWebhookService, type MerchantWebhookService } from "./mod
 import { createPaymentsService } from "./modules/payments/payments.service";
 import { createPaymentsRouter } from "./modules/payments/payments.routes";
 import { createCheckoutRouter } from "./modules/payments/checkout.routes";
+import { createLinksService } from "./modules/payments/links.service";
+import { createLinksAdminRouter, createPayRouter } from "./modules/payments/links.routes";
+import { createSettingsService } from "./modules/settings/settings.service";
+import { createSettingsRouter } from "./modules/settings/settings.routes";
 import { catalogBootstrapEnabled, ensureTestProduct } from "./modules/products/products.bootstrap";
 import { ordersRouter } from "./modules/orders/orders.routes";
 import { createProductsRouter } from "./modules/products/products.routes";
@@ -49,6 +53,8 @@ export interface AppHandles {
   observers: ObserversService;
   merchantWebhooks: MerchantWebhookService;
   payments: ReturnType<typeof createPaymentsService>;
+  settings: ReturnType<typeof createSettingsService>;
+  links: ReturnType<typeof createLinksService>;
 }
 
 export function createApp(deps: AppDeps): AppHandles {
@@ -61,6 +67,10 @@ export function createApp(deps: AppDeps): AppHandles {
     db: deps.db,
     now: deps.now,
     onSettled: async (input) => {
+      // Naya VPA stage hua tha? Us par ₹1 test settle hote hi wo live ho jaata hai.
+      await settings
+        .promoteIfPendingMatches(input.session.vpa, { actor: "system:vpa-verification" })
+        .catch(() => undefined);
       await deps.onSettled?.(input);
       // Merchant ko signed proof — ye fail ho to payment phir bhi SUCCESS rehta hai.
       await merchantWebhooks.dispatch(input).catch(() => undefined);
@@ -69,6 +79,8 @@ export function createApp(deps: AppDeps): AppHandles {
 
   const observers = createObserversService({ db: deps.db, gateway, now: deps.now });
   const payments = createPaymentsService({ db: deps.db, gateway });
+  const settings = createSettingsService({ db: deps.db, now: deps.now });
+  const links = createLinksService({ db: deps.db, settings, gateway, now: deps.now });
 
   const app = express();
   app.disable("x-powered-by");
@@ -174,10 +186,18 @@ export function createApp(deps: AppDeps): AppHandles {
   app.use("/api/v1/payments", createPaymentsRouter(payments));
   // Ek call me order + UPI QR (browser ka extra round-trip khatam).
   app.use("/api/v1/checkout", createCheckoutRouter(payments));
+  // Payment links — buyer side (fixed amount locked, open amount validated).
+  app.use("/api/v1/pay", createPayRouter({ links, settings, payments, db: deps.db }));
+  // Admin: UPI settings (VPA + audit) aur payment links.
+  app.use(
+    "/api/v1/admin/settings",
+    createSettingsRouter({ settings, db: deps.db, adminToken: deps.adminToken, gateway }),
+  );
+  app.use("/api/v1/admin/links", createLinksAdminRouter({ links, adminToken: deps.adminToken }));
   app.use("/api/v1/observers", createObserversRouter(deps.db));
 
   app.use(notFoundHandler);
   app.use(errorHandler);
 
-  return { app, gateway, observers, merchantWebhooks, payments };
+  return { app, gateway, observers, merchantWebhooks, payments, settings, links };
 }

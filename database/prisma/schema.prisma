@@ -29,6 +29,8 @@ model MerchantAccount {
   vpa                 String   @unique
   /// QR me dikhne wala payee naam (bank app me yahi naam dikhta hai)
   payeeName           String
+  /// UPI `mc` merchant code (bank/PSP se mila ho to) — UPI intent me jaata hai
+  merchantCode        String?
   /// Merchant ke server ka webhook URL (signed delivery yahan jaati hai)
   webhookUrl          String?
   /// HMAC secret (merchant ke server ke saath shared). Sirf hash nahi — verify karna hai.
@@ -82,6 +84,8 @@ model Order {
   customerPhone  String
   /// Idempotency-Key ka SHA-256 — double click par double order nahi
   idempotencyKey String      @unique
+  /// Payment link se aaya order ho to uska id (attribution ke liye)
+  linkId         String?
   items          OrderItem[]
   sessions       PaymentSession[]
   createdAt      DateTime    @default(now())
@@ -233,4 +237,72 @@ model OutboundWebhook {
 
   @@index([status, nextAttemptAt])
   @@index([paymentId])
+}
+
+// ---------------------------------------------------------------------------
+// Settings — admin se badalne wali cheezein (VPA pending, open-link limits)
+// ---------------------------------------------------------------------------
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Payment links — fixed amount ya open amount, token se public
+// ---------------------------------------------------------------------------
+
+enum PaymentLinkKind {
+  FIXED
+  OPEN
+}
+
+enum PaymentLinkStatus {
+  ACTIVE
+  DISABLED
+}
+
+model PaymentLink {
+  id             String            @id @default(cuid())
+  /// Public URL me jaane wala secret (`/pay/<token>`) — guess-proof
+  token          String            @unique
+  kind           PaymentLinkKind
+  title          String
+  /// UPI `tn` note
+  note           String
+  /// FIXED par locked amount (integer paise); OPEN par NULL
+  amountPaise    Int?
+  minAmountPaise Int?
+  maxAmountPaise Int?
+  status         PaymentLinkStatus  @default(ACTIVE)
+  maxUses        Int               @default(1000)
+  usedCount      Int               @default(0)
+  expiresAt      DateTime?
+  createdBy      String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Audit log — append-only (DB trigger se UPDATE/DELETE block)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  entity    String
+  entityId  String?
+  before    String?
+  after     String?
+  ip        String?
+  requestId String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
 }

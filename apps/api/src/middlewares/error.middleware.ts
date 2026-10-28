@@ -36,6 +36,9 @@ export class AppError extends Error {
   static forbidden(code: string, message: string) {
     return new AppError(403, code, message);
   }
+  static tooManyRequests(code: string, message: string, details?: unknown) {
+    return new AppError(429, code, message, details);
+  }
   static unavailable(code: string, message: string, details?: unknown) {
     return new AppError(503, code, message, details);
   }

@@ -117,7 +117,12 @@ export function createGatewayService({ db, now = () => new Date(), onSettled, on
   }
 
   const service = {
-    async startForOrder(input: { orderId: string }): Promise<SessionView> {
+    /**
+     * `vpaOverride` sirf ek case me: admin ne naya VPA stage kiya hai aur us par
+     * **₹1 test** chal raha hai. Normal orders me kabhi override nahi hota — warna
+     * live QR kisi unverified VPA par chala jaata.
+     */
+    async startForOrder(input: { orderId: string; vpaOverride?: string | null }): Promise<SessionView> {
       const merchant = await requireMerchant();
       const order = await db.findOrderById(input.orderId);
       if (!order) throw AppError.notFound("ORDER_NOT_FOUND", "Order nahi mila.");
@@ -136,11 +141,14 @@ export function createGatewayService({ db, now = () => new Date(), onSettled, on
       const isActiveSlotFree = active.length < Math.max(1, merchant.slotConcurrency);
 
       const reference = referenceFor(now());
+      const payVpa = input.vpaOverride ?? merchant.vpa;
       const upiString = buildUpiString({
-        vpa: merchant.vpa,
+        vpa: payVpa,
         payeeName: merchant.payeeName,
         amountPaise: order.amountPaise,
         reference,
+        transactionRef: order.id,
+        merchantCode: merchant.merchantCode ?? null,
       });
 
       const session = await db.createSession({
@@ -150,7 +158,7 @@ export function createGatewayService({ db, now = () => new Date(), onSettled, on
         currency: order.currency,
         reference,
         upiString,
-        vpa: merchant.vpa,
+        vpa: payVpa,
         queuePosition: queued.length + 1,
         payExpiresAt: new Date(now().getTime() + merchant.payWindowSeconds * 1000),
         status: isActiveSlotFree ? "ACTIVE" : "QUEUED",
