@@ -31,3 +31,6 @@ Format: Date | Decision | Reason | Alternatives
 
 | 2026-10-28 | API Vercel par **ek function (`api/gateway.ts`) + rewrite** se serve hota hai | Filesystem catch-all nested paths par 404 de raha tha; rewrite ke baad routing poora Express me rehta hai, naya endpoint add karne par config nahi badalta | `api/v1/[...path].ts` (nested 404), `vercel.json` `builds`/`routes` (deprecated) |
 | 2026-10-28 | Prisma client + serverless bundle **`postinstall`** se bante hain (sirf `VERCEL=1`) | Custom build command par Vercel `api/` functions ignore karta tha; postinstall dono cases me chalta hai aur local install par skip ho jaata hai | Custom `buildCommand` (api/ functions chhoot jaate the) |
+| 2026-10-28 | Dono Vercel projects `bom1` (Mumbai) region me | Users India me, DB bhi Mumbai — har hop ~250ms bachta hai | `iad1` default (US), multi-region (Hobby par cost/free-tier limit) |
+| 2026-10-28 | Catalog pages **ISR** + API par `s-maxage`, par orders/payments par koi cache nahi | Catalog 30-60s purana chal jaata hai; payment status kabhi stale nahi ho sakta | Sab kuch `no-store` (slow), sab cache (galat payment status) |
+| 2026-10-28 | Browser calls `/api/*` = **edge rewrite** to API (storefront function bypass) | Ek poora lambda hop (~100-300ms) bachta hai, CORS ki zarurat bhi nahi | Server-side proxy route handler (2 function hops) |

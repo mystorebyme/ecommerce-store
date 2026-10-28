@@ -10,6 +10,17 @@ import { getProduct, rupees } from "@/lib/api";
 // Catalog badle to `revalidatePath("/")` ya thoda intezaar (stale-while-revalidate).
 export const revalidate = 30;
 
+/** Per-product title/description — SEO + browser tab me turant naam. */
+export async function generateMetadata({ params }: { params: { slug: string } }) {
+  const product = await getProduct(params.slug);
+  if (!product) return { title: "Product" };
+  return {
+    title: product.name,
+    description: `${product.name} — ${rupees(product.pricePaise)} (incl. GST). UPI se seedha merchant ke account me payment.`,
+    openGraph: { title: product.name, type: "website" },
+  };
+}
+
 export default async function ProductPage({ params }: { params: { slug: string } }) {
   const product = await getProduct(params.slug);
   if (!product) notFound();

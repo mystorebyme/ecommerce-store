@@ -92,3 +92,15 @@
   storefront home + `/checkout?product=prod_kurta` (₹1,899, "Pay ₹1,899 with UPI").
 - **Ab bacha:** bank-SMS observer phone par (auto-confirm), aur `MERCHANT_WEBHOOK_SECRET` /
   `PAY_WINDOW_SECONDS` / `VERIFY_WINDOW_SECONDS` env vars.
+
+## 2026-10-28 (3) — Performance: Mumbai region + CDN caching + hop removal
+
+- **Region `bom1` (Mumbai)** dono projects ke liye (`vercel.json` → `regions`) — pehle `iad1`
+  (Washington) tha, isliye har request me India → US → Mumbai ka chakkar lagta tha.
+- **Storefront:** `/` aur `/products` ab **ISR static** (30s), `s-maxage` + SWR; checkout 10s.
+- **API:** catalog par `s-maxage=60, stale-while-revalidate=300`; sweep background me.
+- **Ek hop kam:** `/api/*` ab edge rewrite se seedha API par jaata hai (storefront lambda nahi).
+- **UI:** `(shop)/loading.tsx` skeleton + shimmer (`prefers-reduced-motion` respect),
+  edge middleware hata diya, `_next/static` immutable, product page `generateMetadata`.
+- Verified: `apps/web` build ✅ (home/products `○` static), `tsc` ✅, API tests 58/58 ✅,
+  live health + catalog + product page + checkout page ✅.

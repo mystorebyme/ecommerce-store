@@ -94,6 +94,21 @@ curl -s https://youpi-gateway-api.vercel.app/api/v1/products
 
 Agar `BOOT_FAILED` aaye to `DATABASE_URL` check karo; `dbHost: null` matlab dono host fail.
 
+## Performance (latency budget)
+
+| Kya | Pehle | Ab |
+|-----|-------|-----|
+| Region | `iad1` (Washington) — India se har hop ~250ms | **`bom1` (Mumbai)** — storefront + API + DB teeno ek hi sheher me |
+| Home / catalog | har request par function (`force-dynamic`) | **ISR**: CDN par 30s cached, `stale-while-revalidate` |
+| `/api/products` | function har baar chalta | `s-maxage=60, stale-while-revalidate=300` (CDN cached JSON) |
+| Browser → API | browser → storefront lambda → API lambda | **edge rewrite** — beech ka lambda hop khatam |
+| Timers sweep | har request sweep ka intezaar karti thi | background me, catalog/health par bilkul nahi |
+| Edge middleware | har page par ek extra invocation | hata diya (headers `next.config.js` me) |
+| Route change | blank screen | `loading.tsx` skeleton (0ms par layout) |
+
+Cold start ka bada hissa Prisma engine hai (~300-500ms, sirf pehli baar per instance) —
+uske baad warm instance par response ~20-60ms (Mumbai → Mumbai).
+
 ## Storefront deployment
 
 | Setting | Value |
