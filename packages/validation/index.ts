@@ -45,30 +45,58 @@ export const createOrderSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Payment
+// Payment session (self-hosted UPI gateway)
 // ---------------------------------------------------------------------------
 
-export const createPaymentIntentSchema = z.object({
+export const startPaymentSchema = z.object({
   orderId: z.string().min(1),
 });
 
-export const refundSchema = z.object({
-  amountPaise: paiseSchema.optional(), // na do to poora refund
-  reason: z.string().trim().max(120).optional(),
+/** UPI VPA: `name@bank` (e.g. store@okhdfcbank) */
+export const vpaSchema = z
+  .string()
+  .trim()
+  .min(5)
+  .max(100)
+  .regex(/^[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z]{2,32}$/, "VPA format: name@bank");
+
+/** Merchant (apna bank account) configuration — admin token ke saath. */
+export const merchantConfigSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  vpa: vpaSchema,
+  payeeName: z.string().trim().min(2).max(60),
+  webhookUrl: z.string().url().optional(),
+  webhookSecret: z.string().min(16, "Webhook secret kam se kam 16 chars").max(128).optional(),
+  payWindowSeconds: z.number().int().min(60).max(1800).optional(),
+  verifyWindowSeconds: z.number().int().min(10).max(300).optional(),
 });
 
-export const paymentStatusQuerySchema = z.object({
-  /** Long-poll friendly: client jab tak status PENDING hai tab tak poll karta hai. */
-  includeQr: z
-    .union([z.boolean(), z.enum(["true", "false"])])
-    .optional()
-    .transform((v) => v === true || v === "true"),
-});
+/**
+ * Bank observer ka payload. Observer raw SMS text bhej sakta hai (server parse karega)
+ * ya already-parsed amount + UTR.
+ */
+export const observationSchema = z
+  .object({
+    source: z.enum(["ANDROID_SMS", "GMAIL", "MESSAGES", "MANUAL"]),
+    deviceId: z.string().trim().min(3).max(80),
+    messageId: z.string().trim().min(3).max(120),
+    rawText: z.string().trim().min(10).max(1000).optional(),
+    amountPaise: paiseSchema.optional(),
+    utr: z
+      .string()
+      .trim()
+      .regex(/^[0-9]{9,18}$/, "UTR 9-18 digits")
+      .optional(),
+    senderVpa: vpaSchema.optional(),
+    bankName: z.string().trim().max(40).optional(),
+    observedAt: z.coerce.date().optional(),
+  })
+  .refine((value) => Boolean(value.rawText) || (Boolean(value.amountPaise) && Boolean(value.utr)), {
+    message: "rawText ya (amountPaise + utr) me se kuch ek zaroori hai",
+    path: ["rawText"],
+  });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
-export type CreatePaymentIntentInput = z.infer<typeof createPaymentIntentSchema>;
-export type RefundInput = z.infer<typeof refundSchema>;
-
-/** Provider ka naam — naya gateway add karna ho to yahan ek value add karo. */
-export const paymentProviders = ["razorpay"] as const;
-export type PaymentProviderName = (typeof paymentProviders)[number];
+export type StartPaymentInput = z.infer<typeof startPaymentSchema>;
+export type MerchantConfigInput = z.infer<typeof merchantConfigSchema>;
+export type ObservationInput = z.infer<typeof observationSchema>;

@@ -14,12 +14,13 @@ E-commerce clothing store (India). Reference sites se sirf feature aur layout st
 - Folder structure bina `DECISIONS.md` me likhe mat badlo.
 
 ## Critical rules (short)
-Paisa integer paise me | server price decide kare | stock atomic decrement | Razorpay webhook raw body + signature + event-id dedupe |
+Paisa integer paise me | server price decide kare | stock atomic decrement | self-hosted UPI gateway: ek VPA par ek ACTIVE slot, observer webhook raw body + HMAC + UTR dedupe |
 payment sirf server se confirm | order idempotent | uploads presigned | queues BullMQ | validation `packages/validation` me.
 Poori list `STRUCTURE.md` me.
 
 ## Tech stack
-Next.js + TypeScript + Tailwind, Node.js + Express, PostgreSQL + Prisma, Redis + BullMQ, pnpm + Turborepo, S3/R2, Razorpay, Shiprocket.
+Next.js + TypeScript + Tailwind, Node.js + Express, PostgreSQL + Prisma, Redis + BullMQ, pnpm + Turborepo, S3/R2,
+self-hosted UPI gateway (koi payment aggregator nahi — `apps/api/src/modules/gateway`), Shiprocket.
 Final decision `docs/03-architecture/adr` me.
 
 ## Coding standards

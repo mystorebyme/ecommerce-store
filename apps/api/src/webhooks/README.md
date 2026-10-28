@@ -2,35 +2,36 @@
 
 Third-party callbacks yahan rehte hain — modules se alag, kyunki inko **raw body** chahiye.
 
-## Rule (har webhook par)
+## Rule (har inbound webhook par)
 
-1. `app.ts` me **`express.json()` se PEHLE** `express.raw({ type: "application/json" })` se mount karo.
-2. Signature **raw body** par verify karo, apni API key secret se nahi — webhook secret se.
-   - Razorpay: `HMAC_SHA256(rawBody, RAZORPAY_WEBHOOK_SECRET)` == `x-razorpay-signature`
-3. `x-razorpay-event-id` ko DB me **unique** save karo (`WebhookEvent.eventId`).
-   Duplicate delivery aayi to `{ status: "duplicate" }` + 200.
-4. Turant 2xx do. Asli kaam (email, invoice, Shiprocket) queue/worker me jaata hai.
-5. Payment status sirf yahan (ya server-side verify se) badalta hai — **browser response se kabhi nahi**.
-6. Amount mismatch ho to PAID mat karo (`ORDER_AMOUNT_MISMATCH`) — alert bhejo.
+1. `app.ts` me **`express.json()` se PEHLE** `express.raw({ type: "*/*" })` se mount karo.
+2. Signature **raw body** par verify karo: `HMAC_SHA256(rawBody, sharedSecret)` == header
+   (`x-observer-signature` me `sha256=<hex>`), timing-safe compare.
+3. Message/delivery id ko DB me **unique** save karo (`BankObservation.deviceId+messageId`,
+   `(utr, amountPaise)`), duplicate par 200 + verdict `DUPLICATE`.
+4. Turant 2xx do. Asli kaam (notification, invoice) queue me jaata hai.
+5. Paisa status **sirf** yahan aayi verified credit se badalta hai — browser response se kabhi nahi.
 
-## Endpoint
+## Endpoints
 
 | Method | Path | Kya |
 |--------|------|-----|
-| `POST` | `/api/v1/webhooks/razorpay` | Razorpay events (payment.captured, payment.failed, qr_code.credited, qr_code.closed) |
+| `POST` | `/api/v1/observers/observations` | Bank observer (Android SMS / Gmail / Messages) — credit entry |
 
-## Local test (curl se, asli HMAC ke saath)
+Shiprocket tracking webhook Phase 1 me `shiprocket.webhook.ts` me aayega.
+
+## Local test
 
 ```bash
-BODY='{"event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_TEST","order_id":"order_TEST","status":"captured","amount":49900,"method":"upi","captured_at":1730000000}}}}'
-SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$RAZORPAY_WEBHOOK_SECRET" -hex | sed 's/^.* //')
+BODY='{"source":"ANDROID_SMS","deviceId":"dev-1","messageId":"m-1","rawText":"Rs.1,899.00 credited to a/c XX4412. UPI ref 412345678901."}'
+SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$OBSERVER_SHARED_SECRET" -hex | sed 's/^.* //')"
 
-curl -X POST http://localhost:4000/api/v1/webhooks/razorpay \
-  -H 'content-type: application/json' \
-  -H "x-razorpay-signature: $SIG" \
-  -H 'x-razorpay-event-id: evt_local_1' \
-  --data-raw "$BODY"
+curl -sX POST localhost:4000/api/v1/observers/observations \
+  -H 'content-type: application/json' -H "x-observer-signature: $SIG" --data-raw "$BODY"
+# → {"data":{"verdict":"SUCCESS"}} ; wahi dobara → DUPLICATE
 ```
 
-Pehli baar `{"status":"handled"}`, dobara same `event-id` → `{"status":"duplicate"}`.
-Galat secret → `401 WEBHOOK_SIGNATURE_INVALID`.
+Galat secret → `401 OBSERVER_SIGNATURE_INVALID`.
+
+Full contract: `docs/06-api/webhooks.md`. Setup: `docs/03-architecture/payment-flow.md`
+(Observer setup section). Simulator: `scripts/observer-simulator.ts`.

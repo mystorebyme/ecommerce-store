@@ -1,11 +1,10 @@
 // Purpose: Database connection
 //
-// Yahan sirf ek chhota "domain repository" surface hai (Db interface) — services
-// Prisma ke generated types par direct depend nahi karti, isliye:
-//   * unit tests in-memory Db se chalte hain (Postgres ki zarurat nahi)
-//   * `prisma generate` alag step hai, code usse pehle bhi typecheck hota hai
-//
-// Production me `createPrismaDb()` PrismaClient use karta hai (single instance).
+// Services Prisma ke generated types par depend nahi karti — sirf is chhote
+// "repository" interface par. Fayda:
+//   * `prisma generate` ke bina bhi typecheck + unit tests chalte hain
+//   * tests in-memory Db use karte hain (Postgres ki zarurat nahi)
+//   * DB badalna ho to sirf `createPrismaDb()` badalta hai
 
 export type OrderStatus =
   | "PENDING_PAYMENT"
@@ -13,17 +12,33 @@ export type OrderStatus =
   | "CANCELLED"
   | "EXPIRED"
   | "REFUNDED"
-  | "PARTIALLY_REFUNDED"
   | "FULFILLED";
 
-export type PaymentStatus =
-  | "CREATED"
-  | "PENDING"
-  | "PAID"
+export type SessionStatus =
+  | "QUEUED"
+  | "ACTIVE"
+  | "PROCESSING"
+  | "SUCCESS"
   | "FAILED"
   | "EXPIRED"
-  | "REFUNDED"
-  | "PARTIALLY_REFUNDED";
+  | "CANCELLED"
+  | "SUSPICIOUS";
+
+export type ObservationSource = "ANDROID_SMS" | "GMAIL" | "MESSAGES" | "MANUAL";
+export type ObservationStatus = "RECEIVED" | "MATCHED" | "DUPLICATE" | "UNMATCHED" | "SUSPICIOUS";
+export type DeliveryStatus = "PENDING" | "DELIVERED" | "FAILED";
+
+export interface MerchantRow {
+  id: string;
+  name: string;
+  vpa: string;
+  payeeName: string;
+  webhookUrl: string | null;
+  webhookSecret: string | null;
+  payWindowSeconds: number;
+  verifyWindowSeconds: number;
+  slotConcurrency: number;
+}
 
 export interface ProductRow {
   id: string;
@@ -59,26 +74,59 @@ export interface OrderWithItems extends OrderRow {
   items: OrderItemRow[];
 }
 
-export interface PaymentRow {
+export interface SessionRow {
   id: string;
   orderId: string;
-  provider: string;
-  providerOrderId: string;
-  providerQrId: string | null;
-  qrString: string | null;
-  qrImageUrl: string | null;
+  merchantId: string;
   amountPaise: number;
   currency: string;
-  status: PaymentStatus;
-  method: string | null;
-  providerPaymentId: string | null;
+  status: SessionStatus;
+  reference: string;
+  upiString: string;
+  vpa: string;
+  queuePosition: number;
+  payExpiresAt: Date;
+  verifyExpiresAt: Date | null;
   utr: string | null;
+  method: string | null;
+  senderVpa: string | null;
   failureReason: string | null;
-  refundedPaise: number;
-  idempotencyKey: string;
-  expiresAt: Date;
-  paidAt: Date | null;
+  settledAt: Date | null;
   createdAt: Date;
+}
+
+export interface ObservationRow {
+  id: string;
+  source: ObservationSource;
+  deviceId: string;
+  messageId: string;
+  rawText: string;
+  amountPaise: number;
+  utr: string;
+  senderVpa: string | null;
+  bankName: string | null;
+  direction: string;
+  observedAt: Date;
+  status: ObservationStatus;
+  sessionId: string | null;
+}
+
+export interface DeliveryRow {
+  id: string;
+  merchantId: string;
+  event: string;
+  paymentId: string;
+  orderId: string;
+  deliveryId: string;
+  url: string;
+  payload: unknown;
+  status: DeliveryStatus;
+  attempts: number;
+  lastStatusCode: number | null;
+  lastError: string | null;
+  nextAttemptAt: Date;
+  createdAt: Date;
+  deliveredAt: Date | null;
 }
 
 export interface CreateOrderRecord {
@@ -91,74 +139,154 @@ export interface CreateOrderRecord {
   items: OrderItemRow[];
 }
 
-export interface CreatePaymentRecord {
+export interface CreateSessionRecord {
   orderId: string;
-  provider: string;
-  providerOrderId: string;
+  merchantId: string;
   amountPaise: number;
   currency: string;
-  idempotencyKey: string;
-  expiresAt: Date;
+  reference: string;
+  upiString: string;
+  vpa: string;
+  queuePosition: number;
+  payExpiresAt: Date;
+  status: SessionStatus;
 }
 
-export interface WebhookRecord {
-  provider: string;
-  eventId: string;
-  eventType: string;
-  payload: unknown;
+export interface CreateObservationRecord {
+  source: ObservationSource;
+  deviceId: string;
+  messageId: string;
+  rawText: string;
+  amountPaise: number;
+  utr: string;
+  senderVpa: string | null;
+  bankName: string | null;
+  direction: string;
+  observedAt: Date;
 }
+
+export interface CreateDeliveryRecord {
+  merchantId: string;
+  event: string;
+  paymentId: string;
+  orderId: string;
+  deliveryId: string;
+  url: string;
+  payload: unknown;
+  nextAttemptAt: Date;
+}
+
+export type SessionPatch = {
+  failureReason?: string | null;
+  verifyExpiresAt?: Date | null;
+  utr?: string | null;
+  senderVpa?: string | null;
+  settledAt?: Date | null;
+  payExpiresAt?: Date;
+};
 
 /**
- * Jo bhi DB operations services ko chahiye — bas itna. Naya module aaye to
- * yahan methods add karo, phir `createPrismaDb()` aur test fixture update karo.
+ * Services ko bas itna chahiye. Naya module aaye to yahan methods add karo,
+ * phir `createPrismaDb()` aur `tests/fixtures/memory-db.ts` update karo.
  */
 export interface Db {
+  // Merchant
+  getMerchant(): Promise<MerchantRow | null>;
+  upsertMerchant(input: {
+    name: string;
+    vpa: string;
+    payeeName: string;
+    webhookUrl?: string | null;
+    webhookSecret?: string | null;
+    payWindowSeconds?: number;
+    verifyWindowSeconds?: number;
+  }): Promise<MerchantRow>;
+
+  // Catalog + orders
   findProductsByIds(ids: string[]): Promise<ProductRow[]>;
-  /** Atomic: `UPDATE stock = stock - qty WHERE id = ? AND stock >= qty`. false = out of stock. */
   decrementStock(productId: string, qty: number): Promise<boolean>;
   incrementStock(productId: string, qty: number): Promise<void>;
-
   createOrder(record: CreateOrderRecord): Promise<OrderRow>;
   findOrderById(id: string): Promise<OrderWithItems | null>;
   findOrderByIdempotencyKey(key: string): Promise<OrderRow | null>;
   setOrderStatus(orderId: string, status: OrderStatus): Promise<void>;
 
-  createPayment(record: CreatePaymentRecord): Promise<PaymentRow>;
-  findPaymentById(id: string): Promise<PaymentRow | null>;
-  findPaymentByIdempotencyKey(key: string): Promise<PaymentRow | null>;
-  findPaymentByProviderOrderId(providerOrderId: string): Promise<PaymentRow | null>;
-  findPaymentByQrId(qrId: string): Promise<PaymentRow | null>;
-  attachQr(paymentId: string, qr: { qrId: string; qrString: string | null; qrImageUrl: string | null }): Promise<void>;
-  setPaymentStatus(
-    paymentId: string,
-    status: PaymentStatus,
-    extra?: { failureReason?: string | null; method?: string | null },
-  ): Promise<void>;
-  markPaymentPaid(
-    paymentId: string,
-    paid: { providerPaymentId: string; utr: string | null; method: string | null; paidAt: Date },
-  ): Promise<void>;
-  recordRefund(paymentId: string, refund: { refundPaise: number; status: PaymentStatus }): Promise<void>;
-  /** CREATED/PENDING attempts jo expire ho gaye — scheduler isse call karta hai. */
-  expireStalePayments(now: Date): Promise<number>;
+  // Payment sessions
+  createSession(record: CreateSessionRecord): Promise<SessionRow>;
+  findSessionById(id: string): Promise<SessionRow | null>;
+  listSessionsForOrder(orderId: string): Promise<SessionRow[]>;
+  listSessionsByStatus(merchantId: string, status: SessionStatus): Promise<SessionRow[]>;
+  updateSession(id: string, patch: Partial<SessionPatch> & { status?: SessionStatus }): Promise<void>;
+  /** ACTIVE sessions jinka pay window nikal gaya. */
+  findExpiredActiveSessions(now: Date): Promise<SessionRow[]>;
+  /** PROCESSING sessions jinka verify window nikal gaya. */
+  findExpiredProcessingSessions(now: Date): Promise<SessionRow[]>;
 
-  /** Duplicate eventId par `{ inserted: false }` — webhook dedupe ka core. */
-  insertWebhookEvent(record: WebhookRecord): Promise<{ inserted: boolean; id: string }>;
-  markWebhookEvent(id: string, status: "PROCESSED" | "IGNORED" | "FAILED", error?: string): Promise<void>;
+  // Bank observations
+  insertObservation(record: CreateObservationRecord): Promise<{ inserted: boolean; row: ObservationRow | null }>;
+  findObservationByMessage(deviceId: string, messageId: string): Promise<ObservationRow | null>;
+  findObservationsByUtr(utr: string): Promise<ObservationRow[]>;
+  /** Exact amount wale live sessions — attribution ka core. */
+  findLiveSessionsByAmount(merchantId: string, amountPaise: number): Promise<SessionRow[]>;
+  updateObservation(id: string, patch: { status?: ObservationStatus; sessionId?: string | null }): Promise<void>;
+
+  // Outbound webhooks
+  createDelivery(record: CreateDeliveryRecord): Promise<DeliveryRow>;
+  dueDeliveries(now: Date, limit: number): Promise<DeliveryRow[]>;
+  recordDeliveryAttempt(
+    id: string,
+    result: {
+      delivered: boolean;
+      /** retries khatam — status FAILED */
+      failed?: boolean;
+      statusCode: number | null;
+      error: string | null;
+      nextAttemptAt: Date;
+      attempt: number;
+    },
+  ): Promise<void>;
 }
 
 let cached: Db | null = null;
 
-/**
- * Prisma-backed implementation. `@prisma/client` lazily require hota hai taaki
- * bina `prisma generate` ke bhi tests / typecheck chalte rahein.
- */
 export function createPrismaDb(prismaClient?: unknown): Db {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const prisma: any =
     prismaClient ?? new (require("@prisma/client").PrismaClient as new () => any)();
 
   return {
+    async getMerchant() {
+      const row = await prisma.merchantAccount.findFirst({ orderBy: { createdAt: "asc" } });
+      return row ? mapMerchant(row) : null;
+    },
+    async upsertMerchant(input) {
+      const existing = await prisma.merchantAccount.findUnique({ where: { vpa: input.vpa } });
+      const row = existing
+        ? await prisma.merchantAccount.update({
+            where: { id: existing.id },
+            data: {
+              name: input.name,
+              payeeName: input.payeeName,
+              webhookUrl: input.webhookUrl ?? existing.webhookUrl,
+              webhookSecret: input.webhookSecret ?? existing.webhookSecret,
+              payWindowSeconds: input.payWindowSeconds ?? existing.payWindowSeconds,
+              verifyWindowSeconds: input.verifyWindowSeconds ?? existing.verifyWindowSeconds,
+            },
+          })
+        : await prisma.merchantAccount.create({
+            data: {
+              name: input.name,
+              vpa: input.vpa,
+              payeeName: input.payeeName,
+              webhookUrl: input.webhookUrl ?? null,
+              webhookSecret: input.webhookSecret ?? null,
+              payWindowSeconds: input.payWindowSeconds ?? 300,
+              verifyWindowSeconds: input.verifyWindowSeconds ?? 30,
+            },
+          });
+      return mapMerchant(row);
+    },
+
     async findProductsByIds(ids) {
       const rows = await prisma.product.findMany({ where: { id: { in: ids } } });
       return rows.map(mapProduct);
@@ -198,88 +326,100 @@ export function createPrismaDb(prismaClient?: unknown): Db {
     async setOrderStatus(orderId, status) {
       await prisma.order.update({ where: { id: orderId }, data: { status } });
     },
-    async createPayment(record) {
-      const row = await prisma.payment.create({ data: record });
-      return mapPayment(row);
+
+    async createSession(record) {
+      const row = await prisma.paymentSession.create({ data: record });
+      return mapSession(row);
     },
-    async findPaymentById(id) {
-      const row = await prisma.payment.findUnique({ where: { id } });
-      return row ? mapPayment(row) : null;
+    async findSessionById(id) {
+      const row = await prisma.paymentSession.findUnique({ where: { id } });
+      return row ? mapSession(row) : null;
     },
-    async findPaymentByIdempotencyKey(key) {
-      const row = await prisma.payment.findUnique({ where: { idempotencyKey: key } });
-      return row ? mapPayment(row) : null;
+    async listSessionsForOrder(orderId) {
+      const rows = await prisma.paymentSession.findMany({ where: { orderId }, orderBy: { createdAt: "desc" } });
+      return rows.map(mapSession);
     },
-    async findPaymentByProviderOrderId(providerOrderId) {
-      const row = await prisma.payment.findFirst({ where: { providerOrderId } });
-      return row ? mapPayment(row) : null;
-    },
-    async findPaymentByQrId(qrId) {
-      const row = await prisma.payment.findFirst({ where: { providerQrId: qrId } });
-      return row ? mapPayment(row) : null;
-    },
-    async attachQr(paymentId, qr) {
-      await prisma.payment.update({
-        where: { id: paymentId },
-        data: { providerQrId: qr.qrId, qrString: qr.qrString, qrImageUrl: qr.qrImageUrl, status: "PENDING" },
+    async listSessionsByStatus(merchantId, status) {
+      const rows = await prisma.paymentSession.findMany({
+        where: { merchantId, status },
+        orderBy: [{ queuePosition: "asc" }, { createdAt: "asc" }],
       });
+      return rows.map(mapSession);
     },
-    async setPaymentStatus(paymentId, status, extra) {
-      await prisma.payment.update({
-        where: { id: paymentId },
-        data: { status, failureReason: extra?.failureReason ?? null, method: extra?.method ?? null },
+    async updateSession(id, patch) {
+      await prisma.paymentSession.update({ where: { id }, data: patch });
+    },
+    async findExpiredActiveSessions(now) {
+      const rows = await prisma.paymentSession.findMany({
+        where: { status: "ACTIVE", payExpiresAt: { lte: now } },
       });
+      return rows.map(mapSession);
     },
-    async markPaymentPaid(paymentId, paid) {
-      await prisma.payment.update({
-        where: { id: paymentId },
-        data: {
-          status: "PAID",
-          providerPaymentId: paid.providerPaymentId,
-          utr: paid.utr,
-          method: paid.method,
-          paidAt: paid.paidAt,
-          failureReason: null,
-        },
+    async findExpiredProcessingSessions(now) {
+      const rows = await prisma.paymentSession.findMany({
+        where: { status: "PROCESSING", verifyExpiresAt: { lte: now } },
       });
+      return rows.map(mapSession);
     },
-    async recordRefund(paymentId, refund) {
-      await prisma.payment.update({
-        where: { id: paymentId },
-        data: { refundedPaise: refund.refundPaise, status: refund.status },
-      });
-    },
-    async expireStalePayments(now) {
-      const result = await prisma.payment.updateMany({
-        where: { status: { in: ["CREATED", "PENDING"] }, expiresAt: { lt: now } },
-        data: { status: "EXPIRED" },
-      });
-      return result.count;
-    },
-    async insertWebhookEvent(record) {
+
+    async insertObservation(record) {
       try {
-        const row = await prisma.webhookEvent.create({
-          data: {
-            provider: record.provider,
-            eventId: record.eventId,
-            eventType: record.eventType,
-            payload: record.payload as object,
-          },
-        });
-        return { inserted: true, id: row.id };
+        const row = await prisma.bankObservation.create({ data: record });
+        return { inserted: true, row: mapObservation(row) };
       } catch (error) {
-        // P2002 = unique constraint (eventId dobara) → duplicate delivery
         if (isUniqueViolation(error)) {
-          const existing = await prisma.webhookEvent.findUnique({ where: { eventId: record.eventId } });
-          return { inserted: false, id: existing?.id ?? "" };
+          const row = await prisma.bankObservation.findFirst({
+            where: { OR: [{ utr: record.utr }, { deviceId: record.deviceId, messageId: record.messageId }] },
+          });
+          return { inserted: false, row: row ? mapObservation(row) : null };
         }
         throw error;
       }
     },
-    async markWebhookEvent(id, status, error) {
-      await prisma.webhookEvent.update({
+    async findObservationByMessage(deviceId, messageId) {
+      const row = await prisma.bankObservation.findUnique({
+        where: { deviceId_messageId: { deviceId, messageId } },
+      });
+      return row ? mapObservation(row) : null;
+    },
+    async findObservationsByUtr(utr) {
+      const rows = await prisma.bankObservation.findMany({ where: { utr } });
+      return rows.map(mapObservation);
+    },
+    async findLiveSessionsByAmount(merchantId, amountPaise) {
+      const rows = await prisma.paymentSession.findMany({
+        where: { merchantId, amountPaise, status: { in: ["QUEUED", "ACTIVE", "PROCESSING"] } },
+        orderBy: [{ queuePosition: "asc" }],
+      });
+      return rows.map(mapSession);
+    },
+    async updateObservation(id, patch) {
+      await prisma.bankObservation.update({ where: { id }, data: patch });
+    },
+
+    async createDelivery(record) {
+      const row = await prisma.outboundWebhook.create({ data: record });
+      return mapDelivery(row);
+    },
+    async dueDeliveries(now, limit) {
+      const rows = await prisma.outboundWebhook.findMany({
+        where: { status: "PENDING", nextAttemptAt: { lte: now } },
+        orderBy: { nextAttemptAt: "asc" },
+        take: limit,
+      });
+      return rows.map(mapDelivery);
+    },
+    async recordDeliveryAttempt(id, result) {
+      await prisma.outboundWebhook.update({
         where: { id },
-        data: { status, error: error ?? null, processedAt: new Date() },
+        data: {
+          status: result.delivered ? "DELIVERED" : result.failed ? "FAILED" : "PENDING",
+          attempts: result.attempt,
+          lastStatusCode: result.statusCode,
+          lastError: result.error,
+          nextAttemptAt: result.nextAttemptAt,
+          deliveredAt: result.delivered ? new Date() : null,
+        },
       });
     },
   };
@@ -290,13 +430,27 @@ export function getDb(): Db {
   return cached;
 }
 
-/** Tests / scripts ke liye — apna Db inject karo. */
+/** Server/tests apna Db inject karte hain. */
 export function setDb(db: Db | null): void {
   cached = db;
 }
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: string }).code === "P2002";
+}
+
+function mapMerchant(row: any): MerchantRow {
+  return {
+    id: row.id,
+    name: row.name,
+    vpa: row.vpa,
+    payeeName: row.payeeName,
+    webhookUrl: row.webhookUrl ?? null,
+    webhookSecret: row.webhookSecret ?? null,
+    payWindowSeconds: row.payWindowSeconds ?? 300,
+    verifyWindowSeconds: row.verifyWindowSeconds ?? 30,
+    slotConcurrency: row.slotConcurrency ?? 1,
+  };
 }
 
 function mapProduct(row: any): ProductRow {
@@ -335,26 +489,63 @@ function mapOrderItem(row: any): OrderItemRow {
   };
 }
 
-function mapPayment(row: any): PaymentRow {
+function mapSession(row: any): SessionRow {
   return {
     id: row.id,
     orderId: row.orderId,
-    provider: row.provider,
-    providerOrderId: row.providerOrderId,
-    providerQrId: row.providerQrId ?? null,
-    qrString: row.qrString ?? null,
-    qrImageUrl: row.qrImageUrl ?? null,
+    merchantId: row.merchantId,
     amountPaise: row.amountPaise,
     currency: row.currency,
     status: row.status,
-    method: row.method ?? null,
-    providerPaymentId: row.providerPaymentId ?? null,
+    reference: row.reference,
+    upiString: row.upiString,
+    vpa: row.vpa,
+    queuePosition: row.queuePosition ?? 0,
+    payExpiresAt: row.payExpiresAt,
+    verifyExpiresAt: row.verifyExpiresAt ?? null,
     utr: row.utr ?? null,
+    method: row.method ?? null,
+    senderVpa: row.senderVpa ?? null,
     failureReason: row.failureReason ?? null,
-    refundedPaise: row.refundedPaise ?? 0,
-    idempotencyKey: row.idempotencyKey,
-    expiresAt: row.expiresAt,
-    paidAt: row.paidAt ?? null,
+    settledAt: row.settledAt ?? null,
     createdAt: row.createdAt,
+  };
+}
+
+function mapObservation(row: any): ObservationRow {
+  return {
+    id: row.id,
+    source: row.source,
+    deviceId: row.deviceId,
+    messageId: row.messageId,
+    rawText: row.rawText,
+    amountPaise: row.amountPaise,
+    utr: row.utr,
+    senderVpa: row.senderVpa ?? null,
+    bankName: row.bankName ?? null,
+    direction: row.direction ?? "CREDIT",
+    observedAt: row.observedAt,
+    status: row.status,
+    sessionId: row.sessionId ?? null,
+  };
+}
+
+function mapDelivery(row: any): DeliveryRow {
+  return {
+    id: row.id,
+    merchantId: row.merchantId,
+    event: row.event,
+    paymentId: row.paymentId,
+    orderId: row.orderId,
+    deliveryId: row.deliveryId,
+    url: row.url,
+    payload: row.payload,
+    status: row.status,
+    attempts: row.attempts ?? 0,
+    lastStatusCode: row.lastStatusCode ?? null,
+    lastError: row.lastError ?? null,
+    nextAttemptAt: row.nextAttemptAt,
+    createdAt: row.createdAt,
+    deliveredAt: row.deliveredAt ?? null,
   };
 }

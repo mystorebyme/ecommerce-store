@@ -1,9 +1,11 @@
 // Purpose: Poora DB schema (tables, relations). Paisa integer paise me
 //
-// Scope of this slice: catalog price + order + payment attempt + webhook dedupe.
-// Ye wo minimum tables hain jinse ek asli Razorpay UPI payment end-to-end chalta hai.
-// Baaki [P1] modules (users, addresses, cart, shipping, invoices, consents, audit-logs)
-// apne modules ke saath yahan add honge — ye file hi single source of truth rahegi.
+// Ye self-hosted YouPI gateway ka schema hai — koi payment aggregator nahi:
+//   MerchantAccount (merchant ka apna VPA) → Order → PaymentSession (single-use UPI QR)
+//   BankObservation (SMS/Gmail/Messages se aayi credit entry) → match → SUCCESS
+//   OutboundWebhook (merchant ke server ko signed delivery, retries ke saath)
+//
+// Paisa har jagah integer paise. Kabhi float nahi.
 
 generator client {
   provider = "prisma-client-js"
@@ -15,14 +17,40 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
-// Catalog — price ka single source of truth (client se aayi price par bharosa nahi)
+// Merchant — paisa isi ke apne bank account (VPA) me jaata hai
+// ---------------------------------------------------------------------------
+
+model MerchantAccount {
+  id                  String   @id @default(cuid())
+  name                String
+  /// UPI VPA jahan buyer pay karega, e.g. `store@okhdfcbank`
+  vpa                 String   @unique
+  /// QR me dikhne wala payee naam (bank app me yahi naam dikhta hai)
+  payeeName           String
+  /// Merchant ke server ka webhook URL (signed delivery yahan jaati hai)
+  webhookUrl          String?
+  /// HMAC secret (merchant ke server ke saath shared). Sirf hash nahi — verify karna hai.
+  webhookSecret       String?
+  payWindowSeconds    Int      @default(300) // 5 minute pay window
+  verifyWindowSeconds Int      @default(30) // 30 second verification window
+  /// Ek VPA par ek hi ACTIVE slot (FIFO queue baaki buyers ke liye)
+  slotConcurrency     Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sessions  PaymentSession[]
+  deliveries OutboundWebhook[]
+}
+
+// ---------------------------------------------------------------------------
+// Catalog + orders
 // ---------------------------------------------------------------------------
 
 model Product {
   id         String   @id @default(cuid())
   sku        String   @unique
   name       String
-  /// Integer paise. ₹499.00 = 49900. Kabhi float nahi.
+  /// Integer paise. ₹1,899.00 = 189900
   pricePaise Int
   stock      Int      @default(0)
   active     Boolean  @default(true)
@@ -33,33 +61,27 @@ model Product {
   @@index([active])
 }
 
-// ---------------------------------------------------------------------------
-// Orders
-// ---------------------------------------------------------------------------
-
 enum OrderStatus {
   PENDING_PAYMENT
   PAID
   CANCELLED
   EXPIRED
   REFUNDED
-  PARTIALLY_REFUNDED
   FULFILLED
 }
 
 model Order {
   id             String      @id @default(cuid())
-  number         String      @unique // YP-1041 (customer-facing)
+  number         String      @unique
   status         OrderStatus @default(PENDING_PAYMENT)
-  /// Server ne products se recompute kiya hua total. Client ka bheja amount ignore hota hai.
   amountPaise    Int
   currency       String      @default("INR")
   customerName   String
   customerPhone  String
-  /// Idempotency-Key header ka hash — double click par double order nahi banta.
+  /// Idempotency-Key ka SHA-256 — double click par double order nahi
   idempotencyKey String      @unique
   items          OrderItem[]
-  payments       Payment[]
+  sessions       PaymentSession[]
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -80,77 +102,133 @@ model OrderItem {
   lineTotalPaise Int
 
   @@index([orderId])
-  // Ek order me ek product ek hi row me (merge qty instead of duplicate rows).
   @@unique([orderId, productId])
 }
 
 // ---------------------------------------------------------------------------
-// Payments — har try ka apna record, har try ka apna single-use QR
+// Payment sessions — har try ka apna single-use QR, ek VPA par ek ACTIVE slot
 // ---------------------------------------------------------------------------
 
-enum PaymentStatus {
-  CREATED // provider order bana, QR ban raha hai
-  PENDING // QR ready, buyer ke scan ka wait
-  PAID // sirf verified webhook / server-side verify se
+enum SessionStatus {
+  QUEUED // slot ka wait (FIFO position ke saath)
+  ACTIVE // QR live, buyer 5 min tak pay kar sakta hai
+  PROCESSING // credit dikha, verification window chal raha hai
+  SUCCESS
   FAILED
   EXPIRED
-  REFUNDED
-  PARTIALLY_REFUNDED
+  CANCELLED
+  SUSPICIOUS // match nahi hua / ambiguous / verify timeout — manual review
 }
 
-model Payment {
-  id                String        @id @default(cuid())
-  orderId           String
-  order             Order         @relation(fields: [orderId], references: [id])
-  provider          String        @default("razorpay")
-  providerOrderId   String // rzp order_xxx
-  providerQrId      String? // rzp qr_xxx
-  /// QR me encode hui `upi://pay?...` string (client sirf image dikhata hai)
-  qrString          String?
-  qrImageUrl        String?
-  amountPaise       Int
-  currency          String        @default("INR")
-  status            PaymentStatus @default(CREATED)
-  method            String? // upi / card / netbanking
-  providerPaymentId String?
-  /// UPI reference (12 digit UTR) — reconciliation ke liye
-  utr               String?
-  failureReason     String?
-  refundedPaise     Int           @default(0)
-  /// Idempotency-Key header ka hash
-  idempotencyKey    String        @unique
-  expiresAt         DateTime
-  paidAt            DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+model PaymentSession {
+  id              String        @id @default(cuid())
+  orderId         String
+  order           Order         @relation(fields: [orderId], references: [id])
+  merchantId      String
+  merchant        MerchantAccount @relation(fields: [merchantId], references: [id])
+  amountPaise     Int
+  currency        String        @default("INR")
+  status          SessionStatus @default(QUEUED)
+  /// Order ka short reference — QR ke `tn` (transaction note) me jaata hai
+  reference       String        @unique
+  /// Poora `upi://pay?pa=...&am=...&tn=...` string (client ise render karta hai)
+  upiString       String
+  vpa             String
+  /// FIFO order (badhne wala number; display position read ke waqt compute hoti hai)
+  queuePosition   Int           @default(0)
+  payExpiresAt    DateTime
+  verifyExpiresAt DateTime?
+  /// 12-digit UPI reference bank statement se
+  utr             String?       @unique
+  method          String?       @default("upi")
+  senderVpa       String?
+  failureReason   String?
+  settledAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  observations BankObservation[]
 
   @@index([orderId])
-  @@index([status])
-  @@index([providerOrderId])
+  @@index([merchantId, status])
+  @@index([status, payExpiresAt])
 }
 
 // ---------------------------------------------------------------------------
-// Webhook dedupe — provider dobara bheje to dobara process na ho
+// Bank observations — observer (Android SMS / Gmail / Messages) se aayi entries
 // ---------------------------------------------------------------------------
 
-enum WebhookStatus {
+enum ObservationSource {
+  ANDROID_SMS
+  GMAIL
+  MESSAGES
+  MANUAL
+}
+
+enum ObservationStatus {
   RECEIVED
-  PROCESSED
-  IGNORED
+  MATCHED
+  DUPLICATE
+  UNMATCHED
+  SUSPICIOUS
+}
+
+model BankObservation {
+  id          String            @id @default(cuid())
+  source      ObservationSource
+  /// Observer device/app id (audit + trust ke liye)
+  deviceId    String
+  /// Observer-side unique id — same message dobara bheje to duplicate
+  messageId   String
+  rawText     String
+  amountPaise Int
+  /// 12-digit UPI UTR / RRN
+  utr         String
+  senderVpa   String?
+  bankName    String?
+  /// CREDIT hi accept hota hai (DEBIT ignore)
+  direction   String            @default("CREDIT")
+  observedAt  DateTime
+  status      ObservationStatus @default(RECEIVED)
+  sessionId   String?
+  session     PaymentSession?   @relation(fields: [sessionId], references: [id])
+  createdAt   DateTime          @default(now())
+
+  @@unique([utr, amountPaise])
+  @@unique([deviceId, messageId])
+  @@index([sessionId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Outbound webhooks — merchant ke server ko signed delivery + retries
+// ---------------------------------------------------------------------------
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
   FAILED
 }
 
-model WebhookEvent {
-  id          String        @id @default(cuid())
-  provider    String        @default("razorpay")
-  /// provider ka unique delivery id (x-razorpay-event-id). Unique = duplicate protection.
-  eventId     String        @unique
-  eventType   String
-  payload     Json
-  status      WebhookStatus @default(RECEIVED)
-  error       String?
-  receivedAt  DateTime      @default(now())
-  processedAt DateTime?
+model OutboundWebhook {
+  id             String         @id @default(cuid())
+  merchantId     String
+  merchant       MerchantAccount @relation(fields: [merchantId], references: [id])
+  event          String
+  paymentId      String
+  orderId        String
+  /// Har delivery ka apna id — merchant isse dedupe karta hai
+  deliveryId     String         @unique
+  url            String
+  payload        Json
+  status         DeliveryStatus @default(PENDING)
+  attempts       Int            @default(0)
+  lastStatusCode Int?
+  lastError      String?
+  nextAttemptAt  DateTime
+  createdAt      DateTime       @default(now())
+  deliveredAt    DateTime?
 
-  @@index([provider, eventType])
+  @@index([status, nextAttemptAt])
+  @@index([paymentId])
 }

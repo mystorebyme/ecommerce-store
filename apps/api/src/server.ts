@@ -1,44 +1,59 @@
 // Purpose: Server start (port listen) + graceful shutdown
 //
-// Yahan sab wiring hoti hai: env → config → prisma db → razorpay provider → app.
-// Keys missing ho to server saaf message ke saath band hota hai (adhoora start nahi).
+// Wiring: env → config → prisma db → merchant (env se seed) → gateway → app.
+// Do timers chalte hain (5s tick):
+//   * gateway.runTimers()        → pay window expire + FIFO promotion + verify timeout
+//   * merchantWebhooks.processDue() → webhook retries (backoff)
 
 import "dotenv/config";
 import { createApp } from "./app";
 import { createPrismaDb } from "./config/db";
-import { assertRazorpayConfigured, loadConfig } from "./config/env";
-import type { createPaymentsService } from "./modules/payments/payments.service";
-import { createRazorpayProvider } from "./modules/payments/providers/razorpay.provider";
+import { configWarnings, loadConfig } from "./config/env";
 
-function main(): void {
+async function main(): Promise<void> {
   const config = loadConfig();
-  assertRazorpayConfigured(config);
+  const warnings = configWarnings(config);
+  for (const warning of warnings) {
+    console.warn(JSON.stringify({ level: "warn", msg: "config", detail: warning }));
+  }
 
   if (!process.env.DATABASE_URL) {
-    console.error("DATABASE_URL missing — docker compose up -d postgres, phir .env check karo.");
+    console.error("DATABASE_URL missing — `docker compose up -d postgres` chalao, phir .env check karo.");
     process.exit(1);
   }
 
   const db = createPrismaDb();
-  const provider = createRazorpayProvider({
-    keyId: config.RAZORPAY_KEY_ID!,
-    keySecret: config.RAZORPAY_KEY_SECRET!,
-    webhookSecret: config.RAZORPAY_WEBHOOK_SECRET ?? "",
-  });
 
-  const app = createApp({
+  // Merchant env se seed/update — pehli baar chalane par admin API ki zarurat nahi.
+  if (config.MERCHANT_VPA) {
+    await db.upsertMerchant({
+      name: config.MERCHANT_NAME,
+      vpa: config.MERCHANT_VPA,
+      payeeName: config.PAYEE_NAME ?? config.MERCHANT_NAME,
+      webhookUrl: config.MERCHANT_WEBHOOK_URL ?? null,
+      webhookSecret: config.MERCHANT_WEBHOOK_SECRET ?? null,
+      payWindowSeconds: config.PAY_WINDOW_SECONDS,
+      verifyWindowSeconds: config.VERIFY_WINDOW_SECONDS,
+    });
+  }
+
+  const { app, gateway, merchantWebhooks } = createApp({
     db,
-    provider,
-    paymentsConfig: {
-      providerKeyId: config.RAZORPAY_KEY_ID!,
-      providerName: provider.name,
-      ttlSeconds: config.PAYMENT_TTL_SECONDS,
-      webBaseUrl: config.PUBLIC_WEB_URL,
-    },
+    observerSecret: config.OBSERVER_SHARED_SECRET ?? "",
+    adminToken: config.ADMIN_API_TOKEN ?? "",
     webOrigin: config.PUBLIC_WEB_URL,
-    onPaid: (paymentId) => {
-      // Production me: emailQueue.add("payment-received", ...) + invoiceQueue.add(...)
-      console.log(JSON.stringify({ level: "info", msg: "payment_paid", paymentId }));
+    onSettled: (input) => {
+      // Production me yahan BullMQ jobs: invoice, email, WhatsApp, Shiprocket.
+      console.log(
+        JSON.stringify({
+          level: "info",
+          msg: "payment_settled",
+          sessionId: input.session.id,
+          orderId: input.order.id,
+          amountPaise: input.session.amountPaise,
+          utr: input.utr,
+        }),
+      );
     },
   });
 
@@ -48,20 +63,26 @@ function main(): void {
         level: "info",
         msg: "api_started",
         port: config.PORT,
-        provider: provider.name,
-        ttlSeconds: config.PAYMENT_TTL_SECONDS,
+        gateway: "youpi-selfhosted",
+        merchantVpa: config.MERCHANT_VPA ?? null,
+        observersEnabled: Boolean(config.OBSERVER_SHARED_SECRET),
       }),
     );
   });
 
-  // Expiry scheduler — 60s me ek baar. Production me BullMQ repeatable job
-  // (`expire-qr.scheduler.ts`) se chalega, par logic wahi `expireStale()` hai.
-  const payments = (app.locals as { payments: ReturnType<typeof createPaymentsService> }).payments;
   const timer = setInterval(() => {
-    payments.expireStale().catch((error: unknown) => {
-      console.error(JSON.stringify({ level: "error", msg: "expire_stale_failed", error: String(error) }));
-    });
-  }, 60_000);
+    gateway
+      .runTimers()
+      .then(async (result) => {
+        if (result.expired || result.suspicious) {
+          console.log(JSON.stringify({ level: "info", msg: "timers", ...result }));
+        }
+        await merchantWebhooks.processDue();
+      })
+      .catch((error: unknown) => {
+        console.error(JSON.stringify({ level: "error", msg: "timer_tick_failed", error: String(error) }));
+      });
+  }, 5_000);
   timer.unref();
 
   const shutdown = (signal: string): void => {
@@ -74,4 +95,7 @@ function main(): void {
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-main();
+main().catch((error) => {
+  console.error(JSON.stringify({ level: "error", msg: "boot_failed", error: String(error) }));
+  process.exit(1);
+});

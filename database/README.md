@@ -11,11 +11,11 @@ npm install                            # root workspaces
 npm run prisma:generate                # @prisma/client
 npx prisma migrate deploy --schema database/prisma/schema.prisma
 psql "$DATABASE_URL" -f database/sql/constraints.sql   # CHECK + unique indexes
-npx tsx database/seeds/seed.ts         # 3 products (₹1,899 / ₹1,299 / ₹749)
+npx tsx database/seeds/seed.ts         # merchant (MERCHANT_VPA) + 3 products
 ```
 
-Prisma ki jagah raw SQL pasand ho to `database/migrations/0001_init_payments.sql` chalao —
-dono raste same tables banate hain.
+Prisma ki jagah raw SQL pasand ho to `database/migrations/0001_init_youpi_gateway.sql`
+chalao — dono raste same tables banate hain.
 
 ## Migration
 
@@ -34,11 +34,18 @@ baad me drop karo.
 
 | Table | Kya |
 |-------|-----|
+| `MerchantAccount` | aapka VPA, payee name, webhook URL/secret, pay + verify window |
 | `Product` | sku, pricePaise, stock (CHECK >= 0) |
 | `Order` | number, status, amountPaise, idempotencyKey (unique) |
 | `OrderItem` | per line: unitPricePaise, qty, lineTotalPaise (CHECK lineTotal = unit × qty) |
-| `Payment` | har attempt: providerOrderId, providerQrId, status, utr, refundedPaise |
-| `WebhookEvent` | eventId (unique), type, payload, status — dedupe ka core |
+| `PaymentSession` | har try: reference (QR ka `tn`), status, payExpiresAt, verifyExpiresAt, utr (unique) |
+| `BankObservation` | observer credit: rawText, amountPaise, utr, source, deviceId (dedupe) |
+| `OutboundWebhook` | merchant delivery: deliveryId (unique), payload, attempts, nextAttemptAt |
+
+DB-level safety (raw SQL, `constraints.sql`):
+- ek merchant par ek hi `ACTIVE` session (`one_active_slot_per_merchant`, partial unique index)
+- ek order par ek live session (`one_live_session_per_order`)
+- `(utr, amountPaise)` unique — same credit dobara process nahi hota
 
 Baaki tables (`User`, `Address`, `Cart`, `Shipment`, `Invoice`, `AuditLog`, `Consent`…)
 Phase 1 modules ke saath isi schema me add honge.
@@ -53,5 +60,5 @@ Phase 1 modules ke saath isi schema me add honge.
 ## Pitfalls (jo pehle bhi ho chuke hain)
 
 - `prisma generate` bhoolna → runtime par "@prisma/client did not initialize yet".
-- `constraints.sql` skip karna → negative stock / duplicate webhook possible ho jaata hai.
+- `constraints.sql` skip karna → negative stock, duplicate credits, aur do ACTIVE slots possible ho jaate hain.
 - Amount rupees (float) me save karna → rounding bug; hamesha paise.

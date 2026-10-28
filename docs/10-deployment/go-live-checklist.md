@@ -1,68 +1,107 @@
-# Go-live checklist — real payments
+# Go-live checklist — real UPI payments (self-hosted)
 
-> Purpose: test mode se asli paisa lene tak ka step-by-step
-> Owner: payments + ops · Estimated: 1 din technical + Razorpay KYC ka wait
+> Purpose: local demo se asli paisa lene tak — zero platform fee, paisa aapke bank me
+> Owner: you + ops · Total time: ~1 din (bank side ka kuch nahi, koi KYC/aggregator nahi)
 
-## 0. Pehle ye samajh lo
+## 0. Isme kya chahiye (aur kya nahi)
 
-Code test mode aur live mode me **bilkul same** hai. Sirf keys badalti hain. Isliye
-pehle test mode me poora flow (order → QR → webhook → PAID → refund) chala lo, phir live.
+| Chahiye | Nahi chahiye |
+|---------|--------------|
+| Ek bank account + usi ka **UPI VPA** (personal ya current) | Razorpay/PayU/Cashfree account |
+| Ek phone jo 24×7 on rahe (Android observer) | KYC / merchant onboarding |
+| Public HTTPS API (webhook + observer ke liye) | Settlement cycle / platform fee |
 
-## 1. Razorpay account + KYC
+⚠️ Business ke liye **current account + GST** recommend karte hain (invoices ke liye), par
+technically personal account se bhi UPI receive hota hai.
 
-- [ ] Business account banao (PAN, GST, bank account, business proof)
-- [ ] KYC approve hone ka wait (1–3 working days)
-- [ ] Payment methods enable: **UPI QR** (zaroori), cards, netbanking
-- [ ] Settlement account verify (paisa yahan aayega)
+## 1. VPA + secrets taiyar karo
 
-## 2. Test mode verify (asli code, test paisa)
+```bash
+cp .env.example apps/api/.env
+```
 
-- [ ] `RAZORPAY_KEY_ID=rzp_test_...`, `RAZORPAY_KEY_SECRET=...` `.env` me
-- [ ] `RAZORPAY_WEBHOOK_SECRET` dashboard ke webhook secret ke barabar
-- [ ] DB upar: `docker compose up -d postgres` → `prisma migrate deploy` → seed
-- [ ] `npm run api:dev` → `GET /api/v1/health` → `{"status":"ok"}`
-- [ ] Order → intent → QR render (image dikh raha hai)
-- [ ] Test UPI se QR pay (ya dashboard se simulate) → `GET /payments/:id` = `PAID`
-- [ ] `WebhookEvent` table me event `PROCESSED`
-- [ ] Refund chalao → `REFUNDED` + order `REFUNDED`
-- [ ] Negative tests: galat signature 401, duplicate event `duplicate`, amount mismatch 409
+`.env` me:
 
-## 3. Webhook public URL
+```
+MERCHANT_VPA=yourstore@okhdfcbank      # QR isi par banega
+MERCHANT_NAME=Your Store
+PAYEE_NAME=Your Store                  # bank app me yahi dikhega
+MERCHANT_WEBHOOK_URL=https://your-api.com/api/youpi/webhook
+MERCHANT_WEBHOOK_SECRET=$(openssl rand -hex 24)
+OBSERVER_SHARED_SECRET=$(openssl rand -hex 24)
+ADMIN_API_TOKEN=$(openssl rand -hex 24)
+PAY_WINDOW_SECONDS=300
+VERIFY_WINDOW_SECONDS=30
+```
 
-- [ ] API public HTTPS par deployed ho (webhook ke liye public URL chahiye — localhost nahi)
-       Local test ke liye `ngrok http 4000` ya Cloudflare Tunnel use karo
-- [ ] Razorpay dashboard → Webhooks → `https://api.<domain>/api/v1/webhooks/razorpay`
-- [ ] Events: `payment.captured`, `payment.failed`, `order.paid`, `qr_code.credited`, `qr_code.closed`
-- [ ] Secret `.env` me (server restart)
-- [ ] Test event bhejo → 200 `handled` dashboard me dikhe
+## 2. DB + API deploy
 
-## 4. Live switch
+```bash
+docker compose up -d postgres
+npm install && npm run prisma:generate
+npx prisma migrate deploy --schema database/prisma/schema.prisma
+psql "$DATABASE_URL" -f database/sql/constraints.sql
+npx tsx database/seeds/seed.ts      # merchant + products
+npm run api:build && npm start      # ya pm2/docker
+curl -s https://your-api.com/api/v1/health
+```
 
-- [ ] `RAZORPAY_KEY_ID=rzp_live_...` + live secret (test keys hatado)
-- [ ] Webhook ka **live mode** secret alag hota hai — usse update karo
-- [ ] `PAYMENT_TTL_SECONDS=300` (5 min) — QR ki `close_by` isi se
-- [ ] `PUBLIC_WEB_URL` production domain
-- [ ] ₹1 ka asli order khud karke dekho (UPI se), phir refund kar do
-- [ ] Bank statement me credit match karo (UTR = `Payment.utr`)
+Checklist:
+- [ ] `GET /health` → `merchantVpa` set, `observersEnabled: true`, `webhookDelivery: true`
+- [ ] API public HTTPS par (observer bhi isi URL par POST karega)
+- [ ] DB backup cron (`database/scripts/backup.sh`) daily
+- [ ] Process manager (pm2/systemd) + restart on crash; timers 5 s par chalte rehne chahiye
 
-## 5. Monitoring (live ke pehle din se)
+## 3. Observer chalu karo (yahi asli "verification" hai)
 
-- [ ] Alert: `WebhookEvent.status=FAILED` count > 0
-- [ ] Alert: payments `PENDING` jo 10 min se purane hain
-- [ ] Alert: webhook 401 spike (secret galat ya koi forge kar raha hai)
-- [ ] Daily reconciliation: Razorpay settlement report vs `Payment` (paid, refunded, fees)
-- [ ] Grafana/Sentry me `payment_paid`, `payment_failed`, `amount_mismatch` events
+- [ ] Android phone (merchant ka, 24×7 charging par) — SMS read permission
+- [ ] App ka config: `API_URL`, `OBSERVER_SHARED_SECRET`, `deviceId` (unique naam)
+- [ ] App sirf bank sender ke SMS padhe, body ko **raw** POST kare + `x-observer-signature`
+- [ ] Deliverable `messageId` = SMS timestamp + hash (unique)
+- [ ] Test: apne aap ko ₹1 bhejo → `BankObservation` row + `GET /payments/:id` me credit dikhe
+- [ ] Backup observer: Gmail filter (bank sender) → Apps Script → same endpoint (source `GMAIL`)
+- [ ] Simulator se pehle verify kar lo: `npx tsx scripts/observer-simulator.ts pay <sessionId>`
 
-## 6. Legal / customer-facing
+## 4. Merchant webhook endpoint
 
-- [ ] Refund policy page live (Razorpay approval ke liye bhi chahiye)
-- [ ] Terms + privacy (DPDP) pages live
-- [ ] Invoice (GST) paid hone ke baad generate (Phase 1 `invoices` module)
-- [ ] Failed payment ka support flow (WhatsApp/email + order number)
+- [ ] `/api/youpi/webhook` banaya (raw body, HMAC verify, delivery-id dedupe)
+- [ ] Amount match check: `event.amountPaise === order.amountPaise`
+- [ ] Sirf tabhi order PAID mark karo
+- [ ] `401` return karo galat signature par (delivery FAILED hoke retry hogi)
+- [ ] Test: `curl` se khud ek signed delivery bhejo, phir failure simulate karke retry dekho
 
-## 7. Rollback
+## 5. Paise ka asli test
 
-- [ ] Live keys wapas test keys? **Nahi** — buyer paisa test mode me nahi jayega.
-      Rollback = deploy previous release (`infra/scripts/deploy.sh`), keys same rehti hain.
-- [ ] Kill switch: `PAYMENTS_DISABLED=true` (Phase 1) → `POST /payments/intents` 503,
-      store par COD/contact option dikhe.
+- [ ] Store se ₹1 ka order (ya smallest product) khud karo
+- [ ] QR scan → pay → SMS aaya?
+- [ ] 2–5 s me `GET /payments/:id` → `SUCCESS` + `utr`
+- [ ] Bank statement me credit + UTR match karo
+- [ ] Merchant webhook delivered (`OutboundWebhook.status = DELIVERED`)
+- [ ] Refund manual: UPI se wapas bhejo aur `order.status = REFUNDED` karo (admin route Phase 1)
+
+## 6. Edge cases jo pehle din aayenge
+
+- [ ] **Same amount, do buyers** → queue + `tn` note se pehchan (test me cover hai)
+- [ ] **Buyer ne pay kiya par window expire ho gaya** → credit `UNMATCHED`/`SUSPICIOUS` → refund
+      karo ya manually `SUCCESS` (admin tool Phase 1). Isliye pay window 5 min rakho aur UI me
+      countdown dikhao.
+- [ ] **SMS der se aaya (2 min)** → session tab tak `ACTIVE`/`EXPIRED` ho sakta hai; exact amount +
+      UTR ka `BankObservation` record rehta hai, reconcile se settle karo.
+- [ ] **Airtel/Jio SMS format badal gaya** → parser update karo (`sms-parser.ts` + test case).
+- [ ] **Phone off / internet gaya** → Gmail observer backup; warna credit manual reconcile.
+
+## 7. Monitoring (pehle din se)
+
+- [ ] Alert: `SUSPICIOUS` sessions > 0
+- [ ] Alert: `UNMATCHED` observations > 0 (paisa aaya, order nahi mila)
+- [ ] Alert: webhook `FAILED` > 0
+- [ ] Alert: observer ne 10 min se koi SMS nahi bheja (heartbeat — Phase 1)
+- [ ] Daily: bank statement vs `PaymentSession` (paid, refunded) reconciliation report
+
+## 8. Rollback / incidents
+
+- [ ] Kill switch: `POST /payments` band karna ho to reverse proxy par block, ya `MERCHANT_VPA`
+      khaali karke restart (503 `MERCHANT_NOT_CONFIGURED`) — buyers ko "try later" dikhe
+- [ ] Deploy rollback: previous release (`infra/scripts/deploy.sh`), DB migration forward-only
+- [ ] Paisa aaya par system down: bank statement se manually verify + `BankObservation` replay
+      (`scripts/observer-simulator.ts pay` jaisa replay endpoint Phase 1 me)

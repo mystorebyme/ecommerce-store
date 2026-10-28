@@ -151,8 +151,8 @@ ecommerce-store/
 │   │   │   │   ├── redis.ts   # Redis connection  [Step 8]
 │   │   │   │   └── storage.ts   # S3/R2 client config  [Step 8]
 │   │   │   ├── integrations/
-│   │   │   │   ├── razorpay/   # Payment gateway client (order create, refund, signature verify)
-│   │   │   │   │   └── qr.client.ts   # Per-order single-use fixed-amount UPI QR create/close/fetch  [Step 8]
+│   │   │   │   ├── gateway/   # Self-hosted UPI gateway (koi payment aggregator nahi)
+│   │   │   │   │   └── README.md   # Observer setup: Android SMS app / Gmail watcher / simulator  [Step 8]
 │   │   │   │   ├── email/   # Email provider + templates  [Step 8]
 │   │   │   │   ├── shiprocket/   # Shipping client; token Redis me cache (240h validity)  [Step 8]
 │   │   │   │   ├── sms/   # SMS / OTP provider  [Step 8]
@@ -261,11 +261,17 @@ ecommerce-store/
 │   │   │   │   │   ├── orders.schema.ts   # orders: API-only schemas (shared rules packages/validation se import)  [Step 8]
 │   │   │   │   │   ├── orders.service.ts   # orders: Business logic  [Step 8]
 │   │   │   │   │   └── orders.test.ts   # orders: Module tests  [Step 8]
-│   │   │   │   ├── payments/   # [P1] Provider adapter, per-order single-use UPI QR, status API, server-side verify, refunds, COD
-│   │   │   │   │   ├── providers/
-│   │   │   │   │   │   ├── provider.interface.ts   # Payment provider adapter interface (gateway badalna aasan)  [Step 8]
-│   │   │   │   │   │   └── razorpay.provider.ts   # Razorpay implementation  [Step 8]
-│   │   │   │   │   ├── payment-attempts.service.ts   # Har payment try ka alag record (order + provider QR id)  [Step 8]
+│   │   │   │   ├── gateway/   # [P1] Self-hosted UPI gateway: single-use QR, single-slot FIFO queue, dual timers, observers
+│   │   │   │   │   ├── gateway.service.ts   # Session lifecycle, queue promotion, timers, settle  [Step 8]
+│   │   │   │   │   ├── gateway.qr.ts   # `upi://pay?...` string + vector SVG QR (par-order, fixed amount)  [Step 8]
+│   │   │   │   │   ├── sms-parser.ts   # Bank SMS/email → amountPaise + UTR (HDFC/ICICI/SBI/Paytm formats)  [Step 8]
+│   │   │   │   │   ├── observers.service.ts   # Exact-amount attribution, cross-source verification, verdicts  [Step 8]
+│   │   │   │   │   ├── observers.controller.ts   # Suspicious/unmatched read views  [Step 8]
+│   │   │   │   │   ├── observers.routes.ts   # Observer read routes  [Step 8]
+│   │   │   │   │   └── observers.test.ts   # Observer matching + verification tests  [Step 8]
+│   │   │   │   ├── admin/   # [P1] Admin routes: merchant VPA + webhook config (x-admin-token)
+│   │   │   │   ├── payments/   # [P1] Thin API over gateway: start, status, cancel, attempts, merchant webhook delivery
+│   │   │   │   │   ├── merchant-webhook.service.ts   # HMAC-signed payment.success + retry backoff  [Step 8]
 │   │   │   │   │   ├── payments.controller.ts   # payments: Request/response handling  [Step 8]
 │   │   │   │   │   ├── payments.routes.ts   # payments: URL routes  [Step 8]
 │   │   │   │   │   ├── payments.schema.ts   # payments: API-only schemas (shared rules packages/validation se import)  [Step 8]
@@ -322,7 +328,7 @@ ecommerce-store/
 │   │   │   ├── utils/   # Helper functions (hash, token, slug, pagination, response, money)
 │   │   │   │   └── money.ts   # Paise <-> rupees conversion (kabhi float nahi)  [Step 8]
 │   │   │   ├── webhooks/   # Third-party webhooks (alag folder: raw body chahiye, modules se isolated)
-│   │   │   │   ├── razorpay.webhook.ts   # Razorpay: signature verify (webhook secret), x-razorpay-event-id dedupe, queue  [Step 8]
+│   │   │   │   ├── observer.webhook.ts   # Bank observer ingest: HMAC verify, UTR/message dedupe, raw SMS  [Step 8]
 │   │   │   │   ├── README.md   # Rule: express.raw() se mount, HMAC verify, event-id dedupe, turant 2xx, kaam queue me  [Step 8]
 │   │   │   │   └── shiprocket.webhook.ts   # Shiprocket tracking status updates  [Step 8]
 │   │   │   ├── app.ts   # Express app: webhooks pehle (raw body), phir express.json, phir modules  [Step 8]

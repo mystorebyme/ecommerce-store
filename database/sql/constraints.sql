@@ -1,53 +1,60 @@
 -- Purpose: DB safety: CHECK stock >= 0, unique webhook_event_id, unique idempotency key
 --
 -- Prisma schema me jo constraints express nahi ho sakte, wo yahan raw SQL me hain.
--- `database/migrations/0001_init_payments.sql` ke saath apply karo (dono idempotent hain).
+-- `npm run prisma:generate && npx prisma migrate deploy` ke baad chalao (idempotent).
 
 -- ---------------------------------------------------------------------------
--- 1. Stock kabhi negative na ho (sath me atomic decrement pattern)
+-- 1. Stock kabhi negative na ho + price positive
 -- ---------------------------------------------------------------------------
-ALTER TABLE "Product"
-  ADD CONSTRAINT "product_stock_non_negative" CHECK ("stock" >= 0);
-
-ALTER TABLE "Product"
-  ADD CONSTRAINT "product_price_positive" CHECK ("pricePaise" > 0);
+ALTER TABLE "Product" ADD CONSTRAINT "product_stock_non_negative" CHECK ("stock" >= 0);
+ALTER TABLE "Product" ADD CONSTRAINT "product_price_positive" CHECK ("pricePaise" > 0);
 
 -- ---------------------------------------------------------------------------
--- 2. Order / payment amounts: integer paise, 0 se bada
+-- 2. Amounts: integer paise, positive
 -- ---------------------------------------------------------------------------
-ALTER TABLE "Order"
-  ADD CONSTRAINT "order_amount_positive" CHECK ("amountPaise" > 0);
-
-ALTER TABLE "Payment"
-  ADD CONSTRAINT "payment_amount_positive" CHECK ("amountPaise" > 0);
-
-ALTER TABLE "Payment"
-  ADD CONSTRAINT "payment_refund_not_more_than_paid"
-  CHECK ("refundedPaise" >= 0 AND "refundedPaise" <= "amountPaise");
+ALTER TABLE "Order" ADD CONSTRAINT "order_amount_positive" CHECK ("amountPaise" > 0);
+ALTER TABLE "PaymentSession" ADD CONSTRAINT "session_amount_positive" CHECK ("amountPaise" > 0);
+ALTER TABLE "BankObservation" ADD CONSTRAINT "observation_amount_positive" CHECK ("amountPaise" > 0);
 
 ALTER TABLE "OrderItem"
   ADD CONSTRAINT "order_item_qty_positive" CHECK ("qty" > 0),
-  ADD CONSTRAINT "order_item_line_total_matches"
-  CHECK ("lineTotalPaise" = "unitPricePaise" * "qty");
+  ADD CONSTRAINT "order_item_line_total_matches" CHECK ("lineTotalPaise" = "unitPricePaise" * "qty");
 
 -- ---------------------------------------------------------------------------
--- 3. Idempotency + webhook dedupe (Prisma @unique bhi hai, ye belt-and-braces)
+-- 3. UPI semantics: UTR 12 digit numeric, reference short + uppercase
 -- ---------------------------------------------------------------------------
-CREATE UNIQUE INDEX IF NOT EXISTS "order_idempotency_key_key"
-  ON "Order" ("idempotencyKey");
+ALTER TABLE "BankObservation"
+  ADD CONSTRAINT "observation_utr_12_digits" CHECK ("utr" ~ '^[0-9]{9,18}$');
 
-CREATE UNIQUE INDEX IF NOT EXISTS "payment_idempotency_key_key"
-  ON "Payment" ("idempotencyKey");
+ALTER TABLE "PaymentSession"
+  ADD CONSTRAINT "session_reference_format" CHECK ("reference" ~ '^[A-Z0-9]{6,20}$');
 
-CREATE UNIQUE INDEX IF NOT EXISTS "webhook_event_provider_event_id_key"
-  ON "WebhookEvent" ("provider", "eventId");
+-- Ek order par ek waqt me sirf ek live session (ACTIVE/PROCESSING/QUEUED)
+CREATE UNIQUE INDEX IF NOT EXISTS "one_live_session_per_order"
+  ON "PaymentSession" ("orderId")
+  WHERE "status" IN ('QUEUED', 'ACTIVE', 'PROCESSING');
+
+-- Ek merchant (VPA) par concurrency se zyada ACTIVE slot nahi.
+-- slotConcurrency default 1 => poore VPA par ek hi buyer QR scan kar sakta hai.
+CREATE UNIQUE INDEX IF NOT EXISTS "one_active_slot_per_merchant"
+  ON "PaymentSession" ("merchantId")
+  WHERE "status" = 'ACTIVE';
 
 -- ---------------------------------------------------------------------------
--- 4. Atomic stock decrement — ye pattern hi use karna hai:
+-- 4. Idempotency + dedupe
+-- ---------------------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS "order_idempotency_key_key" ON "Order" ("idempotencyKey");
+CREATE UNIQUE INDEX IF NOT EXISTS "observation_utr_amount_key" ON "BankObservation" ("utr", "amountPaise");
+CREATE UNIQUE INDEX IF NOT EXISTS "delivery_id_key" ON "OutboundWebhook" ("deliveryId");
+
+-- ---------------------------------------------------------------------------
+-- 5. Atomic stock decrement (inventory rule #3):
 --    UPDATE "Product" SET stock = stock - $1 WHERE id = $2 AND stock >= $1;
 --    affected rows = 0  =>  OUT_OF_STOCK (rollback)
---    Inventory module aane par yahi SQL `reservations` ke saath reuse hoga.
 -- ---------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS "payment_pending_lookup"
-  ON "Payment" ("status", "expiresAt")
-  WHERE "status" IN ('CREATED', 'PENDING');
+
+-- 6. Timers ke liye fast scan
+CREATE INDEX IF NOT EXISTS "session_timers"
+  ON "PaymentSession" ("status", "payExpiresAt", "verifyExpiresAt");
+CREATE INDEX IF NOT EXISTS "delivery_due"
+  ON "OutboundWebhook" ("status", "nextAttemptAt");

@@ -17,17 +17,22 @@
   - Static export build (18 routes) — Vercel par bina server chalta hai
   - Guide: `docs/12-demo/demo-suite.md`, app README: `apps/youpi-demo/README.md`
 
-- **Asli payments slice (real money) — `apps/api`** ✅
-  - `POST /api/v1/orders`: price DB se (client se nahi), stock atomic decrement + rollback, `Idempotency-Key`
-  - `POST /api/v1/payments/intents`: Razorpay order + **per-order single-use UPI QR**, 5 min TTL
-  - `GET /api/v1/payments/:id`: status + server-side provider verify (missed webhook ka safety net)
-  - `POST /api/v1/payments/:id/verify`: checkout HMAC verify → provider se `captured` confirm
-  - `POST /api/v1/payments/:id/refund`: partial/full refund, DB CHECK ke saath
-  - `POST /api/v1/webhooks/razorpay`: raw body + HMAC + `x-razorpay-event-id` dedupe + amount match
-  - Provider adapter pattern (`PaymentProvider`) — Razorpay + fake (tests)
-  - Prisma models (`Product`, `Order`, `OrderItem`, `Payment`, `WebhookEvent`) + SQL constraints
-  - 29 tests (`npm run api:test`) — HTTP + asli HMAC, Postgres ki zarurat nahi
-  - Docs: `payment-flow`, `payment-status-api`, `webhooks`, `payment-security`, `go-live-checklist`
+- **Asli payments — YouPI self-hosted UPI gateway (`apps/api`)** ✅ (koi Razorpay/PayU nahi)
+  - `POST /api/v1/orders`: price DB se, stock atomic decrement + rollback, `Idempotency-Key`
+  - `POST /api/v1/payments`: session + **single-use UPI QR** (`upi://pay?pa=<aapka VPA>&am=&tn=`),
+    vector SVG + data URL, **ek VPA par ek ACTIVE slot + FIFO queue** (position + promotion)
+  - Dual server timers DB me: 5 min pay window, 30 s verify window (refresh/restart safe)
+  - `POST /api/v1/observers/observations`: bank observer ingest — raw SMS parsing (HDFC/ICICI/SBI/
+    Paytm/UPI-P2M formats), HMAC signature, `(deviceId,messageId)` + `(utr,amountPaise)` dedupe,
+    exact-amount attribution, cross-source verification (Gmail/Messages ko 2nd proof chahiye)
+  - Merchant webhook: HMAC-signed `payment.success` with delivery-id + 5-step retry backoff
+  - `POST /api/v1/admin/merchant`: VPA/payee/webhook config (`x-admin-token`)
+  - Prisma models: MerchantAccount, Product, Order, OrderItem, PaymentSession, BankObservation,
+    OutboundWebhook + SQL constraints (single active slot, unique UTR, stock >= 0)
+  - 46 tests (`npm run api:test`) — HTTP + asli HMAC, Postgres ki zarurat nahi
+  - `scripts/observer-simulator.ts` — health / pay / flow / admin commands
+  - Docs: payment-flow (observer setup ke saath), payment-status-api, webhooks, payment-security,
+    go-live-checklist
 
 ## Next
 
