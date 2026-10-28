@@ -6,7 +6,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProduct, rupees } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
+// ISR: page CDN par 30s tak cached rehta hai — har visitor par function nahi chalta.
+// Catalog badle to `revalidatePath("/")` ya thoda intezaar (stale-while-revalidate).
+export const revalidate = 30;
 
 export default async function ProductPage({ params }: { params: { slug: string } }) {
   const product = await getProduct(params.slug);

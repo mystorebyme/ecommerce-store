@@ -66,11 +66,18 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/**
+ * Server-side API call.
+ *
+ * `revalidateSeconds > 0` = ISR-friendly fetch (Next ise Data Cache me rakhta hai,
+ * page bhi CDN par static ho jaata hai → India se ~20-40ms TTFB).
+ * `0` = hamesha fresh (order/payment status — yahan stale data galat hoga).
+ */
+async function request<T>(path: string, init: RequestInit = {}, revalidateSeconds = 0): Promise<T> {
   const response = await fetch(`${API_URL}/api/v1${path}`, {
     ...init,
     headers: { "content-type": "application/json", ...(init.headers ?? {}) },
-    cache: "no-store",
+    ...(revalidateSeconds > 0 ? { next: { revalidate: revalidateSeconds } } : { cache: "no-store" as RequestCache }),
   });
 
   const text = await response.text();
@@ -87,9 +94,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 // ---------------------------------------------------------------- catalog
-export async function listProducts(): Promise<Product[]> {
+export async function listProducts(revalidateSeconds = 30): Promise<Product[]> {
   try {
-    const response = await fetch(`${API_URL}/api/v1/products?limit=24`, { cache: "no-store" });
+    const response = await fetch(`${API_URL}/api/v1/products?limit=24`, {
+      next: { revalidate: revalidateSeconds },
+      headers: { accept: "application/json" },
+    });
     if (!response.ok) return [];
     const json = (await response.json()) as { data: Product[] };
     return json.data;
@@ -99,9 +109,9 @@ export async function listProducts(): Promise<Product[]> {
   }
 }
 
-export async function getProduct(id: string): Promise<Product | null> {
+export async function getProduct(id: string, revalidateSeconds = 30): Promise<Product | null> {
   try {
-    return await request<Product>(`/products/${encodeURIComponent(id)}`);
+    return await request<Product>(`/products/${encodeURIComponent(id)}`, {}, revalidateSeconds);
   } catch {
     return null;
   }

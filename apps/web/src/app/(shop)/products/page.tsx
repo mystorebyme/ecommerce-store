@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { listProducts, rupees } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
+// ISR: page CDN par 30s tak cached rehta hai — har visitor par function nahi chalta.
+// Catalog badle to `revalidatePath("/")` ya thoda intezaar (stale-while-revalidate).
+export const revalidate = 30;
 
 export const metadata = { title: "Shop all" };
 

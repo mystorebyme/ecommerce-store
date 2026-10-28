@@ -7,7 +7,8 @@ import Link from "next/link";
 import { QrPayment } from "@/components/checkout/QrPayment";
 import { getProduct, rupees } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
+// Checkout page halka cached (10s) — price/stock API se, payment khud client banata hai.
+export const revalidate = 10;
 
 export const metadata = { title: "Checkout" };
 

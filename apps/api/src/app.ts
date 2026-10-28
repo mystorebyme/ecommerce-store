@@ -143,13 +143,21 @@ export function createApp(deps: AppDeps): AppHandles {
   if (deps.autoSweep) {
     const intervalMs = deps.autoSweep.intervalMs ?? 5_000;
     let lastSweep = 0;
-    app.use("/api/v1", (_req, res, next) => {
+    app.use("/api/v1", (req, _res, next) => {
+      // Catalog/health reads par sweep ki zarurat nahi — unko DB ke extra round-trip
+      // se bachao (yeh storefront ka sabse hot path hai).
+      const method = req.method.toUpperCase();
+      const path = req.path;
+      if (method === "GET" && (path === "/health" || path.startsWith("/products"))) return next();
+
       const nowMs = Date.now();
       if (nowMs - lastSweep < intervalMs) return next();
       lastSweep = nowMs;
-      Promise.all([gateway.runTimers(), merchantWebhooks.processDue()])
-        .catch(() => undefined)
-        .finally(() => next());
+
+      // Response ko sweep ke liye BLOCK nahi karte — background me chalao.
+      // Warna har 5 second me ek request QR expiry + webhook retry ka intezaar karti hai.
+      void Promise.all([gateway.runTimers(), merchantWebhooks.processDue()]).catch(() => undefined);
+      next();
     });
   }
 

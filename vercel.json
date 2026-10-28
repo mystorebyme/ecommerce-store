@@ -11,5 +11,8 @@
       "source": "/api/v1/(.*)",
       "destination": "/api/gateway?__rest=$1"
     }
+  ],
+  "regions": [
+    "bom1"
   ]
 }

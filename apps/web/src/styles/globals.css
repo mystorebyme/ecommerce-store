@@ -489,3 +489,27 @@ h3 {
     height: 200px;
   }
 }
+
+/* ---------------------------------------------------------------- skeleton */
+/* Route change par turant dikhne wala placeholder — layout shift zero,
+   network ka intezaar "khaali screen" ki tarah mehsoos nahi hota. */
+.skeleton {
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.06) 25%, rgba(0, 0, 0, 0.11) 37%, rgba(0, 0, 0, 0.06) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+.skeleton-title { height: 44px; width: min(560px, 90%); margin-bottom: 12px; }
+.skeleton-heading { height: 20px; width: 42%; margin: 6px 0; }
+.skeleton-text { height: 14px; width: min(620px, 100%); margin-bottom: 10px; }
+.skeleton-text.short { width: 55%; }
+.skeleton-art { aspect-ratio: 4 / 5; border-radius: 0; }
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
