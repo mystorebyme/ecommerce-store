@@ -204,6 +204,9 @@ export interface Db {
 
   // Catalog + orders
   findProductsByIds(ids: string[]): Promise<ProductRow[]>;
+  /** Storefront catalog — sirf active products, newest pehle. */
+  listProducts(limit: number): Promise<ProductRow[]>;
+  findProductById(id: string): Promise<ProductRow | null>;
   decrementStock(productId: string, qty: number): Promise<boolean>;
   incrementStock(productId: string, qty: number): Promise<void>;
   createOrder(record: CreateOrderRecord): Promise<OrderRow>;
@@ -291,6 +294,18 @@ export function createPrismaDb(prismaClient?: unknown): Db {
       return mapMerchant(row);
     },
 
+    async listProducts(limit) {
+      const rows = await prisma.product.findMany({
+        where: { active: true },
+        orderBy: [{ createdAt: "asc" }],
+        take: limit,
+      });
+      return rows.map(mapProduct);
+    },
+    async findProductById(id) {
+      const row = await prisma.product.findUnique({ where: { id } });
+      return row ? mapProduct(row) : null;
+    },
     async findProductsByIds(ids) {
       const rows = await prisma.product.findMany({ where: { id: { in: ids } } });
       return rows.map(mapProduct);

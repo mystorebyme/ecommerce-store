@@ -14,6 +14,9 @@
     "api:build": "npm run build -w @youpi/api",
     "api:test": "npm test -w @youpi/api",
     "api:typecheck": "npm run typecheck -w @youpi/api",
-    "prisma:generate": "npm run prisma:generate -w @youpi/api"
+    "prisma:generate": "npm run prisma:generate -w @youpi/api",
+    "api:dev:memory": "tsx scripts/dev-api-memory.ts",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build"
   }
 }

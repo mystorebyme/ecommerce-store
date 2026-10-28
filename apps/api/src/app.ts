@@ -18,6 +18,7 @@ import { createMerchantWebhookService, type MerchantWebhookService } from "./mod
 import { createPaymentsService } from "./modules/payments/payments.service";
 import { createPaymentsRouter } from "./modules/payments/payments.routes";
 import { ordersRouter } from "./modules/orders/orders.routes";
+import { createProductsRouter } from "./modules/products/products.routes";
 import { verifyHmacSha256 } from "./utils/signature";
 import { createObserverWebhook } from "./webhooks/observer.webhook";
 
@@ -125,6 +126,8 @@ export function createApp(deps: AppDeps): AppHandles {
       now: deps.now,
     }),
   );
+  // Public catalog — storefront isse products padhta hai (koi auth nahi).
+  app.use("/api/v1/products", createProductsRouter({ db: deps.db }));
   app.use("/api/v1/orders", ordersRouter);
   app.use("/api/v1/payments", createPaymentsRouter(payments));
   app.use("/api/v1/observers", createObserversRouter(deps.db));

@@ -277,7 +277,7 @@ ecommerce-store/
 │   │   │   │   │   ├── payments.schema.ts   # payments: API-only schemas (shared rules packages/validation se import)  [Step 8]
 │   │   │   │   │   ├── payments.service.ts   # payments: Business logic  [Step 8]
 │   │   │   │   │   └── payments.test.ts   # payments: Module tests  [Step 8]
-│   │   │   │   ├── products/   # [P1] Products, variants (size/color), images, basic search/filter
+│   │   │   │   ├── products/   # [P1] Products — public catalog API (list + detail)  [Step 8 = done]
 │   │   │   │   │   ├── products.controller.ts   # products: Request/response handling  [Step 8]
 │   │   │   │   │   ├── products.routes.ts   # products: URL routes  [Step 8]
 │   │   │   │   │   ├── products.schema.ts   # products: API-only schemas (shared rules packages/validation se import)  [Step 8]
@@ -341,7 +341,7 @@ ecommerce-store/
 │   │   ├── Dockerfile   # API ka Docker image  [Step 8]
 │   │   ├── package.json   # API dependencies aur scripts  [Step 8]
 │   │   └── tsconfig.json   # TypeScript config  [Step 8]
-│   └── web/   # Customer storefront (Next.js + TypeScript + Tailwind)  [Step 8]
+│   └── web/   # Customer storefront (Next.js + TypeScript) — catalog + real UPI checkout  [LIVE]
 │       ├── public/
 │       │   ├── fonts/   # Fonts  [Step 8]
 │       │   ├── icons/   # Icons aur favicon  [Step 8]
@@ -581,6 +581,7 @@ ecommerce-store/
 ├── scripts/   # Dev helper scripts (setup, lint-all, generate-types)  [Step 8]
 │   ├── setup-env.sh   # .env + secrets generate (VPA set) — gitignored  [Step 8]
 │   ├── observer-simulator.ts   # Bank observer simulator: health / pay / flow / admin  [Step 8]
+│   ├── dev-api-memory.ts   # API bina Postgres (in-memory seed) — storefront/UI dev ke liye  [Step 8]
 │   └── setup.sh   # Ek command me project setup  [Step 8]
 ├── tests/   # Cross-app tests (unit tests apne module ke saath hain)  [Step 9]
 │   ├── integration/   # API + database integration tests  [Step 9]

@@ -82,7 +82,7 @@ WEBHOOK_SECRET="$(read_env MERCHANT_WEBHOOK_SECRET)"; [[ -n "$WEBHOOK_SECRET" ]]
 
 upsert NODE_ENV development
 upsert PORT 4000
-upsert PUBLIC_WEB_URL "$(read_env PUBLIC_WEB_URL || echo http://localhost:3000)"
+upsert PUBLIC_WEB_URL "$(read_env PUBLIC_WEB_URL || echo http://localhost:3001)"
 upsert PUBLIC_API_URL "$(read_env PUBLIC_API_URL || echo http://localhost:4000)"
 upsert DATABASE_URL "$(read_env DATABASE_URL || echo postgres://youpi:youpi@localhost:5432/youpi)"
 upsert REDIS_URL "$(read_env REDIS_URL || echo redis://localhost:6379)"

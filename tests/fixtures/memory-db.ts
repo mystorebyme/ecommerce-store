@@ -100,6 +100,12 @@ export function createMemoryDb(options: { now?: () => Date } = {}): MemoryDb {
     getOrder: (orderId) => orders.get(orderId),
     getSession: (sessionId) => sessions.get(sessionId),
 
+    async listProducts(limit) {
+      return [...products.values()].filter((product) => product.active).slice(0, limit);
+    },
+    async findProductById(id) {
+      return products.get(id) ?? null;
+    },
     async findProductsByIds(ids) {
       return ids.map((productId) => products.get(productId)).filter((product): product is ProductRow => Boolean(product));
     },

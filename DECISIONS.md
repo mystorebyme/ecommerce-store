@@ -16,3 +16,9 @@ Format: Date | Decision | Reason | Alternatives
 | 2026-10-28 | **Cross-source verification**: trusted Android SMS akela confirm kar sakta hai, Gmail/Messages/Manual ko 30 s ke andar dusra source chahiye | Ek compromised email/spoofed message se paisa PAID na ho; SMS merchant ke apne phone se aata hai | Har source ko trusted maanna (spoof risk), ya sirf SMS par depend karna (phone off = payments stuck) |
 | 2026-10-28 | Duplicate UTR ko naya row nahi banate — wahi observation row update/confirm hoti hai (`(utr,amountPaise)` unique) | Bank statement ke saath 1:1 reconciliation, aur duplicate delivery/replay se double settle nahi hota | Har delivery ka naya row (reconcile karna mushkil) |
 
+| Date | Decision | Why | Alternative rejected |
+|------|----------|-----|----------------------|
+| 2026-10-28 | Storefront API ko **server-side proxy** (`/api/[...path]`) se call karta hai | CORS config ki zarurat nahi, `API_URL` browser bundle me nahi jaata, cookies/headers ek jagah | Browser se direct API calls (CORS + URL leak) |
+| 2026-10-28 | Catalog endpoints public + sirf `active` products, price response me server se | Storefront ko auth ki zarurat nahi; client ka bheja price kabhi trust nahi hota | Auth-protected catalog (guest checkout tootta) |
+| 2026-10-28 | `scripts/dev-api-memory.ts` sirf UI dev ke liye (in-memory), real orders ke liye Postgres | Storefront bina DB ke develop ho sake; par paisa real path (Prisma + Postgres) par hi chalta hai | SQLite fallback (schema drift + do DB maintain) |
+

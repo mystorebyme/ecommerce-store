@@ -24,7 +24,7 @@ Client call ke liye 5-minute script: [`docs/12-demo/demo-suite.md`](docs/12-demo
 | Folder | Kya hai | Status |
 |--------|---------|--------|
 | `apps/youpi-demo` | **Live, clickable payment-gateway demo** — store, checkout, QR, queue, observers, webhooks, admin console, integration docs (Next.js, static export, Vercel-ready) | ✅ Ready |
-| `apps/web` | Customer storefront (Next.js) | 🚧 Placeholder |
+| `apps/web` | **Customer storefront** — catalog, checkout, asli UPI QR + live status (Next.js, API se juda) | ✅ Payment path live |
 | `apps/admin` | Admin panel (Next.js, alag subdomain) | 🚧 Placeholder |
 | `apps/api` | **Asli backend** — orders (server price, atomic stock, idempotency) + self-hosted UPI gateway (single-use QR, single-slot FIFO queue, bank observers, signed merchant webhooks) (`/api/v1`) | ✅ Payments slice working |
 | `packages/*` | Shared config, types, validation (zod), UI | 🚧 Placeholder |
@@ -41,6 +41,28 @@ npm run dev      # http://localhost:3000
 
 Routes: `/` overview · `/store` storefront · `/checkout` OTP + QR · `/outcomes` 5 outcome pages ·
 `/demo-pack` one-click scenarios · `/admin` merchant console · `/docs` integration guide.
+
+## Asli storefront (`apps/web`) — customer isse pay karta hai
+
+Demo (port 3000) sirf dikhane ke liye hai; **asli** storefront `apps/web` hai — wahi API jo orders,
+stock aur UPI credit verify karta hai.
+
+```bash
+# 1) API (local): Postgres ke saath  → port 4000
+npm run api:dev
+
+# ya sirf UI dekhne ke liye, bina Postgres (in-memory dev API, ⚠️ real money nahi):
+npx tsx scripts/dev-api-memory.ts
+
+# 2) Storefront → port 3001
+cd apps/web && npm install && API_URL=http://localhost:4000 npm run dev
+```
+
+Routes: `/` store · `/products` catalog · `/products/[id]` product · `/checkout?product=<id>` →
+asli QR + live status · `/checkout/success?session=<id>` → server-side confirmed order.
+
+Browser API ko direct nahi chhoota — `/api/*` Next route handler server-side proxy karta hai
+(CORS nahi chahiye, `API_URL` browser me expose nahi hota).
 
 Sab kuch browser ke sandbox ledger par chalta hai — koi real paisa move nahi hota.
 

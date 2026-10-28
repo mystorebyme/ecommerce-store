@@ -40,3 +40,21 @@
 - Demo storefront (`apps/youpi-demo`) ko `apps/api` se jodna (asli QR + status polling) — abhi demo simulated hai.
 - Rate limiting + RBAC admin routes + reconciliation scheduler.
 - `docs/` ke placeholder files ko asli content se bharna (requirement → architecture → data → UI → API → security).
+
+## 2026-10-28 — Real storefront (apps/web) + public catalog API
+
+- **Public catalog:** `GET /api/v1/products` aur `/api/v1/products/:id` — sirf `active` products,
+  price server se (client ka price kabhi trust nahi). Tests: 3 naye (55 total).
+- **Storefront (`apps/web`)** pehli baar build hota hai: catalog home, product detail,
+  checkout aur success page — sab asli API se.
+- **Checkout (real money path):** form → `POST /orders` (`Idempotency-Key`) → `POST /payments`
+  → QR (data URL) + reference + live countdown + FIFO queue badge → `GET /payments/:id` polling
+  har 2s → `SUCCESS` par `/checkout/success` (status **server se**, browser ke claim se nahi).
+- **Proxy:** `/api/[...path]` route handler server-side proxy — CORS ki zarurat nahi, `API_URL`
+  browser me nahi jaata.
+- **Dev tool:** `scripts/dev-api-memory.ts` — API bina Postgres (in-memory seed) chalane ke liye,
+  sirf UI development ke liye (⚠️ persistence/real money nahi).
+- Placeholder pages (`cart`, `account`, `auth`, `wishlist`, `search`, `policies`) ab valid screens
+  hain ("Phase 2") — `next build` pass karta hai, koi dangling route nahi.
+- Verified: `apps/web` `next build` ✅, `tsc --noEmit` ✅, end-to-end curl flow (order → QR →
+  signed observer webhook → `SUCCESS` → success page) ✅, API `npm test` 55/55 ✅.
