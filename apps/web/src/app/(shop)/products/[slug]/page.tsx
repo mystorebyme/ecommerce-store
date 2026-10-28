@@ -4,11 +4,20 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProduct, rupees } from "@/lib/api";
+import { getProduct, listProducts, rupees } from "@/lib/api";
 
 // ISR: page CDN par 30s tak cached rehta hai — har visitor par function nahi chalta.
 // Catalog badle to `revalidatePath("/")` ya thoda intezaar (stale-while-revalidate).
 export const revalidate = 30;
+
+/**
+ * Build par hi saare product pages pre-render ho jaate hain — pehla visitor bhi
+ * CDN se instant page paata hai (on-demand render ka intezaar nahi).
+ */
+export async function generateStaticParams() {
+  const products = await listProducts();
+  return products.map((product) => ({ slug: product.id }));
+}
 
 /** Per-product title/description — SEO + browser tab me turant naam. */
 export async function generateMetadata({ params }: { params: { slug: string } }) {
