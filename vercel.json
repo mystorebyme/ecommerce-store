@@ -6,9 +6,10 @@
       "schedule": "0 3 * * *"
     }
   ],
-  "functions": {
-    "app.js": {
-      "includeFiles": "node_modules/.prisma/client/**"
+  "rewrites": [
+    {
+      "source": "/api/v1/(.*)",
+      "destination": "/api/gateway?__rest=$1"
     }
-  }
+  ]
 }
