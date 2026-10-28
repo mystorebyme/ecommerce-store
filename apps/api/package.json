@@ -11,7 +11,7 @@
     "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/server.js --external:@prisma/client",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/utils/money.test.ts src/modules/orders/orders.test.ts src/modules/products/products.test.ts src/modules/gateway/sms-parser.test.ts src/modules/gateway/gateway.test.ts src/modules/gateway/observers.test.ts src/modules/payments/merchant-webhook.test.ts src/webhooks/observer.webhook.test.ts src/modules/admin/admin.test.ts",
+    "test": "tsx --test src/utils/money.test.ts src/modules/orders/orders.test.ts src/modules/products/products.test.ts src/modules/gateway/sms-parser.test.ts src/modules/gateway/gateway.test.ts src/modules/gateway/observers.test.ts src/modules/payments/merchant-webhook.test.ts src/modules/payments/checkout.test.ts src/webhooks/observer.webhook.test.ts src/modules/admin/admin.test.ts",
     "prisma:generate": "prisma generate --schema ../../database/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema ../../database/prisma/schema.prisma",
     "prisma:deploy": "prisma migrate deploy --schema ../../database/prisma/schema.prisma",

@@ -106,6 +106,20 @@ export function createMemoryDb(options: { now?: () => Date } = {}): MemoryDb {
     async findProductById(id) {
       return products.get(id) ?? null;
     },
+    async upsertProductBySku(record) {
+      const existing = [...products.values()].find((product) => product.sku === record.sku);
+      if (existing) return existing;
+      const row: ProductRow = {
+        id: record.id ?? id("prod"),
+        sku: record.sku,
+        name: record.name,
+        pricePaise: record.pricePaise,
+        stock: record.stock,
+        active: true,
+      };
+      products.set(row.id, row);
+      return row;
+    },
     async findProductsByIds(ids) {
       return ids.map((productId) => products.get(productId)).filter((product): product is ProductRow => Boolean(product));
     },

@@ -207,6 +207,17 @@ export interface Db {
   /** Storefront catalog — sirf active products, newest pehle. */
   listProducts(limit: number): Promise<ProductRow[]>;
   findProductById(id: string): Promise<ProductRow | null>;
+  /**
+   * Catalog bootstrap (idempotent): SKU se product create karo, pehle se ho to
+   * chhedo mat (stock/price kabhi overwrite nahi hote).
+   */
+  upsertProductBySku(record: {
+    id?: string;
+    sku: string;
+    name: string;
+    pricePaise: number;
+    stock: number;
+  }): Promise<ProductRow>;
   decrementStock(productId: string, qty: number): Promise<boolean>;
   incrementStock(productId: string, qty: number): Promise<void>;
   createOrder(record: CreateOrderRecord): Promise<OrderRow>;
@@ -305,6 +316,22 @@ export function createPrismaDb(prismaClient?: unknown): Db {
     async findProductById(id) {
       const row = await prisma.product.findUnique({ where: { id } });
       return row ? mapProduct(row) : null;
+    },
+    async upsertProductBySku(record) {
+      // `update: {}` — pehle se maujood product par kuch bhi overwrite nahi hota.
+      const row = await prisma.product.upsert({
+        where: { sku: record.sku },
+        update: {},
+        create: {
+          ...(record.id ? { id: record.id } : {}),
+          sku: record.sku,
+          name: record.name,
+          pricePaise: record.pricePaise,
+          stock: record.stock,
+          active: true,
+        },
+      });
+      return mapProduct(row);
     },
     async findProductsByIds(ids) {
       const rows = await prisma.product.findMany({ where: { id: { in: ids } } });

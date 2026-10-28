@@ -16,6 +16,8 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   async rewrites() {
     return [
+      { source: "/api/checkout", destination: `${API_URL}/api/v1/checkout` },
+      { source: "/api/admin/:path*", destination: `${API_URL}/api/v1/admin/:path*` },
       { source: "/api/orders", destination: `${API_URL}/api/v1/orders` },
       { source: "/api/orders/:path*", destination: `${API_URL}/api/v1/orders/:path*` },
       { source: "/api/payments", destination: `${API_URL}/api/v1/payments` },

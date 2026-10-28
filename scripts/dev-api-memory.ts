@@ -12,6 +12,7 @@
 
 import { createApp } from "../apps/api/src/app";
 import { createMemoryDb } from "../tests/fixtures/memory-db";
+import { TEST_PRODUCT } from "../apps/api/src/modules/products/products.bootstrap";
 
 async function main() {
   const port = Number(process.env.PORT ?? 4000);
@@ -35,6 +36,7 @@ async function main() {
     { id: "prod_shirt", sku: "SHT-002", name: "Linen Oversized Shirt", pricePaise: 149900, stock: 4 },
     { id: "prod_coord", sku: "CRD-003", name: "Block-Print Co-ord Set", pricePaise: 279900, stock: 3 },
     { id: "prod_dupatta", sku: "DUP-004", name: "Chanderi Dupatta", pricePaise: 89900, stock: 0 },
+    { id: TEST_PRODUCT.id, sku: TEST_PRODUCT.sku, name: TEST_PRODUCT.name, pricePaise: TEST_PRODUCT.pricePaise, stock: TEST_PRODUCT.stock },
   ];
   for (const product of seedProducts) db.seedProduct(product);
 

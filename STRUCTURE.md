@@ -276,13 +276,16 @@ ecommerce-store/
 │   │   │   │   │   ├── payments.routes.ts   # payments: URL routes  [Step 8]
 │   │   │   │   │   ├── payments.schema.ts   # payments: API-only schemas (shared rules packages/validation se import)  [Step 8]
 │   │   │   │   │   ├── payments.service.ts   # payments: Business logic  [Step 8]
-│   │   │   │   │   └── payments.test.ts   # payments: Module tests  [Step 8]
+│   │   │   │   │   ├── payments.test.ts   # payments: Module tests  [Step 8]
+│   │   │   │   │   ├── checkout.routes.ts   # POST /api/v1/checkout — order + UPI QR ek hi round-trip me
+│   │   │   │   │   └── checkout.test.ts   # checkout: ₹1 flow + idempotent replay tests
 │   │   │   │   ├── products/   # [P1] Products — public catalog API (list + detail)  [Step 8 = done]
 │   │   │   │   │   ├── products.controller.ts   # products: Request/response handling  [Step 8]
 │   │   │   │   │   ├── products.routes.ts   # products: URL routes  [Step 8]
 │   │   │   │   │   ├── products.schema.ts   # products: API-only schemas (shared rules packages/validation se import)  [Step 8]
 │   │   │   │   │   ├── products.service.ts   # products: Business logic  [Step 8]
-│   │   │   │   │   └── products.test.ts   # products: Module tests  [Step 8]
+│   │   │   │   │   ├── products.test.ts   # products: Module tests  [Step 8]
+│   │   │   │   │   └── products.bootstrap.ts   # Catalog bootstrap — ₹1 test product (idempotent, create-only)
 │   │   │   │   ├── reviews/   # [P2] Ratings aur reviews
 │   │   │   │   │   ├── reviews.controller.ts   # reviews: Request/response handling  [Step 8]
 │   │   │   │   │   ├── reviews.routes.ts   # reviews: URL routes  [Step 8]
@@ -395,6 +398,8 @@ ecommerce-store/
 │       │   │   │   └── [slug]/
 │       │   │   │       └── page.tsx   # Privacy, terms, refund, shipping policy pages (payment gateway approval ke liye bhi chahiye)  [Step 8]
 │       │   │   ├── layout.tsx   # Root layout (header, footer)  [Step 8]
+│       │   │   ├── admin/   # Merchant ops board (live sessions + manual "mark paid") — temporary, jab tak alag apps/admin nahi banta
+│       │   │   │   └── page.tsx
 │       │   │   ├── not-found.tsx   # 404 page  [Step 8]
 │       │   │   ├── robots.ts   # SEO robots  [Step 8]
 │       │   │   └── sitemap.ts   # SEO sitemap  [Step 8]

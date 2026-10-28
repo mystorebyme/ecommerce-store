@@ -1,9 +1,8 @@
 // Purpose: QR dikhana + live status (paid/failed/expired) + naya QR button
 //
 // Poora real flow — koi mock nahi:
-//   1. POST /api/orders            (Idempotency-Key)  → order, price server se
-//   2. POST /api/payments          { orderId }        → real UPI QR (merchant ke VPA par)
-//   3. GET  /api/payments/:id      har 2s             → SUCCESS hone tak
+//   1. POST /api/checkout   (Idempotency-Key)  → order + real UPI QR, ek hi round-trip me
+//   2. GET  /api/payments/:id  har 1.5s        → SUCCESS hone tak
 //
 // Paisa confirm sirf tab hota hai jab bank SMS/observer us credit ko match kare —
 // browser ka "paid" claim kabhi trust nahi hota.
@@ -54,7 +53,8 @@ export function QrPayment({ product }: Props) {
       setPhase("creating");
 
       try {
-        const orderResponse = await fetch("/api/orders", {
+        // Ek hi request: order banao + UPI QR lo (do round-trip → ek).
+        const response = await fetch("/api/checkout", {
           method: "POST",
           headers: { "content-type": "application/json", "idempotency-key": idempotencyKey.current },
           body: JSON.stringify({
@@ -64,25 +64,15 @@ export function QrPayment({ product }: Props) {
           }),
         });
 
-        const orderJson = await orderResponse.json();
-        if (!orderResponse.ok) {
-          const code = orderJson?.error?.code ?? "ORDER_FAILED";
-          throw new Error(errorText(orderResponse.status, code, orderJson?.error?.message ?? "Order nahi bana."));
+        const json = await response.json();
+        if (!response.ok || !json?.data?.payment) {
+          const code = json?.error?.code ?? (json?.meta?.paymentError ? "PAYMENT_FAILED" : "ORDER_FAILED");
+          throw new Error(
+            errorText(response.status, code, json?.error?.message ?? json?.meta?.paymentError ?? "Order nahi bana."),
+          );
         }
 
-        const paymentResponse = await fetch("/api/payments", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ orderId: orderJson.data.id }),
-        });
-
-        const paymentJson = await paymentResponse.json();
-        if (!paymentResponse.ok) {
-          const code = paymentJson?.error?.code ?? "PAYMENT_FAILED";
-          throw new Error(errorText(paymentResponse.status, code, paymentJson?.error?.message ?? "Payment shuru nahi hua."));
-        }
-
-        setSession(paymentJson.data as PaymentSession);
+        setSession(json.data.payment as PaymentSession);
         setPhase("paying");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Kuch galat ho gaya.");
@@ -114,7 +104,7 @@ export function QrPayment({ product }: Props) {
       } catch {
         /* network blip — agla tick try karega */
       }
-    }, 2000);
+    }, 1500);
 
     return () => {
       stopped = true;

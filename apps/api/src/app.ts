@@ -17,6 +17,8 @@ import { createObserversRouter } from "./modules/gateway/observers.routes";
 import { createMerchantWebhookService, type MerchantWebhookService } from "./modules/payments/merchant-webhook.service";
 import { createPaymentsService } from "./modules/payments/payments.service";
 import { createPaymentsRouter } from "./modules/payments/payments.routes";
+import { createCheckoutRouter } from "./modules/payments/checkout.routes";
+import { catalogBootstrapEnabled, ensureTestProduct } from "./modules/products/products.bootstrap";
 import { ordersRouter } from "./modules/orders/orders.routes";
 import { createProductsRouter } from "./modules/products/products.routes";
 import { verifyHmacSha256, verifySharedToken } from "./utils/signature";
@@ -161,10 +163,17 @@ export function createApp(deps: AppDeps): AppHandles {
     });
   }
 
+  // Catalog bootstrap: ₹1 test product (sirf create, overwrite nahi) — fire-and-forget.
+  if (catalogBootstrapEnabled() && deps.autoSweep !== undefined) {
+    void ensureTestProduct(deps.db);
+  }
+
   // Public catalog — storefront isse products padhta hai (koi auth nahi).
   app.use("/api/v1/products", createProductsRouter({ db: deps.db }));
   app.use("/api/v1/orders", ordersRouter);
   app.use("/api/v1/payments", createPaymentsRouter(payments));
+  // Ek call me order + UPI QR (browser ka extra round-trip khatam).
+  app.use("/api/v1/checkout", createCheckoutRouter(payments));
   app.use("/api/v1/observers", createObserversRouter(deps.db));
 
   app.use(notFoundHandler);

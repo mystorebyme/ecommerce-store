@@ -112,3 +112,18 @@
 - `PUBLIC_WEB_URL` API env me store URL par set; API redeploy.
 - Live proof: `GET /api/v1/health` → ok (bom1), storefront `/api/products` → JSON via **edge rewrite**
   (DB tak round-trip ~1 hop), `/products/prod_shirt` → `Linen Oversized Shirt` title, `/checkout` render ✅.
+
+## 2026-10-28 (4) — ₹1 test product + ek-call checkout + admin board
+
+- **₹1 test product** (`prod_test1`, SKU `TEST-001`, `pricePaise: 100`): catalog bootstrap
+  boot par ek baar chalta hai — **sirf create**, maujood ho to price/stock bilkul nahi chhedta
+  (`CATALOG_BOOTSTRAP=off` se band). Live DB me pehle request par apne aap ban jaata hai.
+- **`POST /api/v1/checkout`**: order + UPI QR **ek hi round-trip** me (pehle frontend do call
+  karta tha → ek network RTT + ek cold-start chance bacha). Invariants same: price server se,
+  atomic stock, `Idempotency-Key` replay par naya QR nahi.
+- **Storefront:** home par "₹1 ka test payment" CTA; payment status polling 2s → **1.5s**.
+- **`/admin` board** (storefront ke andar, temporary): live sessions list + "Mark paid" (UTR)
+  — token sirf `sessionStorage` me, server-side `x-admin-token` ke saath proxy hota hai.
+- Verified locally (in-memory API + Next dev): ₹1 order → `amountPaise: 100` → UPI string
+  `am=1.00`, replay par wahi session, admin confirm se `SUCCESS`. API tests **61/61** ✅,
+  `tsc` (api+web) ✅.

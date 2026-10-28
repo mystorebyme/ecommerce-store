@@ -26,6 +26,11 @@ export default async function StorePage() {
           <span className="pill">↩️ 7-day easy returns</span>
           <span className="pill">🧾 GST invoice</span>
         </div>
+        <p style={{ marginTop: 14 }}>
+          <Link className="btn btn-ghost" href="/checkout?product=prod_test1" prefetch>
+            ₹1 ka test payment karo →
+          </Link>
+        </p>
       </section>
 
       <div className="section-head">
