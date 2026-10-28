@@ -22,3 +22,10 @@ Format: Date | Decision | Reason | Alternatives
 | 2026-10-28 | Catalog endpoints public + sirf `active` products, price response me server se | Storefront ko auth ki zarurat nahi; client ka bheja price kabhi trust nahi hota | Auth-protected catalog (guest checkout tootta) |
 | 2026-10-28 | `scripts/dev-api-memory.ts` sirf UI dev ke liye (in-memory), real orders ke liye Postgres | Storefront bina DB ke develop ho sake; par paisa real path (Prisma + Postgres) par hi chalta hai | SQLite fallback (schema drift + do DB maintain) |
 
+| Date | Decision | Why | Alternative rejected |
+|------|----------|-----|----------------------|
+| 2026-10-28 | API **Vercel serverless** par, timers request-triggered (`autoSweep`) + daily cron | Free/cheap hosting, auto-HTTPS; QR expiry agle request par evaluate hoti hai | VPS (cost + maintenance), long `setInterval` (serverless me chalta nahi) |
+| 2026-10-28 | DB Supabase pooler (`:6543`, pgbouncer) + **do host fallback** | Serverless = hazaaron chhote connections; galat pooler host par deploy na ruke | Direct `db.<ref>.supabase.co` (IPv6-only → Vercel se unreachable) |
+| 2026-10-28 | Observer webhook me **token mode + plain-text body** | Play Store ke forwarder apps HMAC nahi kar sakte; bina iske gateway "live" nahi hota | Sirf HMAC (custom APK build zaroori hoti), sirf manual confirm (scale nahi) |
+| 2026-10-28 | `messageId` optional, server `sha256(deviceId:rawText)` banata hai | Simple forwarder app unique id nahi deti; isse duplicate SMS fer se settle nahi karta | messageId required (forwarder apps fail) |
+

@@ -58,3 +58,17 @@
   hain ("Phase 2") — `next build` pass karta hai, koi dangling route nahi.
 - Verified: `apps/web` `next build` ✅, `tsc --noEmit` ✅, end-to-end curl flow (order → QR →
   signed observer webhook → `SUCCESS` → success page) ✅, API `npm test` 55/55 ✅.
+
+## 2026-10-28 — LIVE: API public on Vercel + Supabase Postgres
+
+- **Supabase** project `youpi-gateway` (ap-south-1): 7 tables, CHECKs + partial unique indexes,
+  merchant (`7073448140@ptsbi`) + 4 products seeded. DDL `database/migrations/0001_init_youpi_gateway.sql` se.
+- **Vercel** project `youpi-gateway-api` → https://youpi-gateway-api.vercel.app/api/v1
+  (functions: `api/index.ts` + `api/v1/[...path].ts`, install me `prisma generate`,
+  `rhel-openssl-3.0.x` engine, daily cron).
+- **DB fallback:** `DATABASE_URL` (aws-1 pooler) → `DATABASE_URL_FALLBACK` (aws-0 pooler);
+  `/api/v1/health` me `dbHost` + `platform` dikhta hai.
+- **Observer onboarding aasan:** `x-observer-token` (HMAC ke bina), plain-text SMS body,
+  `deviceId`/`messageId` optional (server content-hash deta hai → dedupe safe). 2 naye tests (58 total).
+- Docs: `docs/10-deployment/vercel.md` (links, env table, redeploy, test commands, observer setup).
+

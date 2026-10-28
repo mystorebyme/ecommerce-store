@@ -77,9 +77,10 @@ export const merchantConfigSchema = z.object({
  */
 export const observationSchema = z
   .object({
-    source: z.enum(["ANDROID_SMS", "GMAIL", "MESSAGES", "MANUAL"]),
-    deviceId: z.string().trim().min(3).max(80),
-    messageId: z.string().trim().min(3).max(120),
+    source: z.enum(["ANDROID_SMS", "GMAIL", "MESSAGES", "MANUAL"]).default("ANDROID_SMS"),
+    // Simple SMS-forwarder apps ye fields nahi bhej sakte — server defaults/hash use karta hai
+    deviceId: z.string().trim().min(3).max(80).optional(),
+    messageId: z.string().trim().min(3).max(120).optional(),
     rawText: z.string().trim().min(10).max(1000).optional(),
     amountPaise: paiseSchema.optional(),
     utr: z

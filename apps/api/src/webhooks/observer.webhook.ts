@@ -12,6 +12,7 @@
 //   2. `x-observer-token: <OBSERVER_SHARED_SECRET>` — generic SMS-forwarder apps ke liye
 //      (jo HMAC nahi kar sakte). Kamzor hai: sirf HTTPS + rotate karte raho.
 
+import { createHash } from "node:crypto";
 import type { Request, Response } from "express";
 import { AppError } from "../middlewares/error.middleware";
 import type { ObserversService } from "../modules/gateway/observers.service";
@@ -49,12 +50,30 @@ export function createObserverWebhook({ observers, secret, verifySignature, veri
       );
     }
 
-    const body = JSON.parse(rawBody.toString("utf8")) as ObservationInput;
+    /**
+     * Body do tarah ka ho sakta hai:
+     *   1. JSON  — {source, deviceId, messageId, rawText | (amountPaise+utr)}
+     *   2. plain text — poora SMS text (generic forwarder apps aise hi bhejte hain)
+     *
+     * messageId/deviceId optional hain: na de to server `rawText` ka hash banata hai,
+     * isliye same SMS dobara aane par dedupe phir bhi kaam karta hai.
+     */
+    const text = rawBody.toString("utf8").trim();
+    const body: Partial<ObservationInput> = text.startsWith("{")
+      ? (JSON.parse(text) as ObservationInput)
+      : { rawText: text };
+
+    const rawText = body.rawText?.trim();
+    const deviceId = body.deviceId?.trim() || "forwarder-app";
+    const messageId =
+      body.messageId?.trim() ||
+      createHash("sha256").update(`${deviceId}:${rawText ?? ""}:${body.utr ?? ""}`).digest("hex").slice(0, 24);
+
     const result = await observers.ingest({
-      source: body.source,
-      deviceId: body.deviceId,
-      messageId: body.messageId,
-      rawText: body.rawText,
+      source: body.source ?? "ANDROID_SMS",
+      deviceId,
+      messageId,
+      rawText,
       amountPaise: body.amountPaise,
       utr: body.utr,
       senderVpa: body.senderVpa,

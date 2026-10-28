@@ -233,3 +233,26 @@ test("observer token mode: galat token 401", async () => {
 
   assert.equal(response.status, 401);
 });
+
+test("plain text forwarder: sirf SMS text + token bhejo, server khud parse karta hai", async () => {
+  const sms = "Your a/c XX4412 credited Rs 750.00 on 28-10-26. UPI ref 999888777666";
+
+  const response = await fetch(`${baseUrl}/api/v1/observers/observations`, {
+    method: "POST",
+    headers: { "content-type": "text/plain", "x-observer-token": OBSERVER_SECRET },
+    body: sms,
+  });
+
+  assert.equal(response.status, 200);
+  const json = (await response.json()) as { data: { verdict: string } };
+  assert.equal(json.data.verdict, "UNMATCHED"); // paisa aaya, par koi live session nahi
+
+  // Same SMS dobara → dedupe (content hash se messageId banta hai)
+  const again = await fetch(`${baseUrl}/api/v1/observers/observations`, {
+    method: "POST",
+    headers: { "content-type": "text/plain", "x-observer-token": OBSERVER_SECRET },
+    body: sms,
+  });
+  const againJson = (await again.json()) as { data: { verdict: string } };
+  assert.equal(againJson.data.verdict, "DUPLICATE");
+});
